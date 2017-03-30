@@ -1,0 +1,9 @@
+﻿
+@{
+    Layout = "~/Administration/Views/Shared/_AdminLayout.cshtml";
+}
+
+@using (Html.BeginForm())
+{
+    <input type="button" value="Add rPOS Order" onclick="location.href='@Url.Action("Add", "PointofSaleOrder" )'" />
+}  

@@ -1,0 +1,9 @@
+﻿Group: Misc
+FriendlyName: Rail Point-of-Sale
+SystemName: Misc.RailPointofSale
+Version: 0.1
+SupportedVersions: 3.80
+Author: Travis Rail
+DisplayOrder: 1
+FileName: Nop.Plugin.Misc.RailPointofSale.dll
+Description: This plugin will allow you to create ordrers/transcations for the administrative panel. Ideal of doing sales at pop-up sites.

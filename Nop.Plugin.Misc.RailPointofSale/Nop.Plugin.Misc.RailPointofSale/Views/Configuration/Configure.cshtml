@@ -1,0 +1,93 @@
+﻿@{
+    Layout = "";
+}
+
+@model Nop.Plugin.Misc.RailPointofSale.Model.ConfigurationModel
+@using Nop.Web.Framework
+
+@using (Html.BeginForm())
+{
+    @Html.AntiForgeryToken()
+    <div class="panel-group">
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <p>
+                    ![Information on the plugin and how it is used or configured.]
+                </p>
+            </div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="form-group">
+                    <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StoreId_OverrideForStore, model => model.StoreId, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StoreId)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopDropDownList("StoreId", Model.AvailableStores)
+                        @Html.ValidationMessageFor(model => model.StoreId)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StoreAddress_OverrideForStore, model => model.StoreAddress, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StoreAddress)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopEditorFor(model => model.StoreAddress)
+                        @Html.ValidationMessageFor(model => model.StoreAddress)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StoreCity_OverrideForStore, model => model.StoreCity, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StoreCity)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopEditorFor(model => model.StoreCity)
+                        @Html.ValidationMessageFor(model => model.StoreCity)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StoreStateProvinceId_OverrideForStore, model => model.StoreStateProvinceId, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StoreStateProvinceId)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopDropDownList("StoreStateProvinceId", Model.AvailableStateProvice)
+                        @Html.ValidationMessageFor(model => model.StoreStateProvinceId)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StorePostalCode_OverrideForStore, model => model.StorePostalCode, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StorePostalCode)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopEditorFor(model => model.StorePostalCode)
+                        @Html.ValidationMessageFor(model => model.StorePostalCode)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StoreCountryId_OverrideForStore, model => model.StoreCountryId, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StoreCountryId)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopDropDownList("StoreCountryId", Model.AvailableCountries)
+                        @Html.ValidationMessageFor(model => model.StoreCountryId)
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="col-md-3">
+                        &nbsp;
+                    </div>
+                    <div class="col-md-9">
+                        <input type="submit" name="save" class="btn bg-blue" value="@T("Admin.Common.Save")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}  
