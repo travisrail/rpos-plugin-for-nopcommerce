@@ -1,0 +1,1 @@
+# rpos-plugin-for-nopcommerce
