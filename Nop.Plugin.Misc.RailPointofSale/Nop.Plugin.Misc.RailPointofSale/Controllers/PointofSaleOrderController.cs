@@ -216,8 +216,6 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             this._rposSettings = _settingService.LoadSetting<RailPointofSaleSettings>();
         }
 
-        
-
         #endregion
 
         // GET: PointofSaleOrder
