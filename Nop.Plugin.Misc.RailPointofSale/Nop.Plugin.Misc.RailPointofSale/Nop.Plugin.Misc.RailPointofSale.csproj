@@ -111,6 +111,7 @@
     <Content Include="Views\Configuration\Configure.cshtml" />
     <Content Include="Views\PointofSaleOrder\AddProductToPointofSaleOrder.cshtml" />
     <Content Include="Views\PointofSaleOrder\_ProductAddAttributes.cshtml" />
+    <Content Include="Views\PointofSaleOrder\_OrderDetails.Products.cshtml" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
     </None>

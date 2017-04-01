@@ -4,18 +4,18 @@ using Nop.Web.Framework;
 using Nop.Web.Framework.Mvc;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
+using Nop.Admin;
+using Nop.Admin.Models.Orders;
 
 namespace Nop.Plugin.Misc.RailPointofSale.Models
 {
-    public class RailPointofSaleOrderModel : BaseNopModel
+    public class RailPointofSaleOrderModel : Nop.Admin.Models.Orders.OrderModel
     {
 
         public RailPointofSaleOrderModel()
         {
             AvailableProducts = new List<rPOSProduct>();
         }
-
-        public int Id { get; set; }
 
         public List<rPOSProduct> AvailableProducts { get; set; }
     }
