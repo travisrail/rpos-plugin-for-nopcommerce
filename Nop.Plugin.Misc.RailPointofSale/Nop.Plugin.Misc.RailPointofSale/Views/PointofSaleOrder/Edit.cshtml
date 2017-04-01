@@ -3,7 +3,78 @@
     Layout = "~/Administration/Views/Shared/_AdminLayout.cshtml";
 }
 
-@using (Html.BeginForm())
-{
-    <p>Edit</p>
-}  
+@model Nop.Plugin.Misc.RailPointofSale.Models.RailPointofSaleOrderModel
+@using Nop.Web.Framework
+
+@Html.AntiForgeryToken()
+<div class="content-header clearfix">
+    <h1 class="pull-left">New rPOS Order - #</h1>
+
+</div>
+
+<div class="content">
+    <div class="form-horizontal">
+        <div id="order-edit" class="nav-tabs-custom">
+            <ul class="nav nav-tabs">
+                <li class="active"><a data-toggle="tab" href="#tab1">Order Header</a></li>
+                <li><a data-toggle="tab" href="#tab2">Products</a></li>
+            </ul>
+            <div class="tab-content">
+                <div id="tab1" class="tab-pane fade in active">
+                    <h3>Add Products</h3>
+                    <table id="products-grid">
+                        <colgroup>
+                            <col style="width:100px" />
+                            <col style="width:100px" />
+                            <col style="width:100px" />
+                            <col style="width:200px" />
+                            <col style="width:100px" />
+                            <col />
+                            <col style="width:100px" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Select</th>
+                                <th>ID</th>
+                                <th>Photo</th>
+                                <th>Vendor</th>
+                                <th>SKU</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in Model.AvailableProducts)
+                            {
+                                <tr>
+                                    <td></td>
+                                    <td>@product.Id</td>
+                                    <td>
+                                        <img src="@product.ProductThumbnail" />
+                                    </td>
+                                    <td>@product.Vendor</td>
+                                    <td>@product.Sku</td>
+                                    <td>@product.Name</td>
+                                    <td>@product.Price.ToString("$#.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <script>
+                        $(document).ready(function () {
+                            $("#products-grid").kendoGrid({
+                                height: 550,
+                                sortable: true
+                            });
+                        });
+                    </script>
+                </div>
+                <div id="tab2" class="tab-pane fade">
+                    <h3>Order Products</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+

@@ -7,9 +7,16 @@ using Nop.Core.Domain.Orders;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Common;
 using Nop.Core.Domain.Directory;
+using Nop.Core.Domain.Catalog;
 using Nop.Services.Orders;
 using Nop.Services.Configuration;
 using Nop.Services.Customers;
+using Nop.Services.Catalog;
+using Nop.Services.Authentication;
+
+using Nop.Plugin.Misc.RailPointofSale.Models;
+using Nop.Services.Media;
+using Nop.Services.Vendors;
 
 namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 {
@@ -21,17 +28,25 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         private readonly IOrderTotalCalculationService _orderTotalCalculationService;
         private readonly ICustomerService _customerService;
         private readonly ISettingService _settingService;
+        private readonly IProductService _productService;
+        private readonly IAuthenticationService _authenticationService;
+        private readonly IPictureService _pictureService;
+        private readonly IVendorService _vendorService;
 
         private RailPointofSaleSettings _rposSettings;
         #endregion
 
-        public PointofSaleOrderController(IOrderService orderService, IOrderProcessingService orderProcessingService, IOrderTotalCalculationService orderTotalCalculationService, ICustomerService customerService, ISettingService settingService)
+        public PointofSaleOrderController(IOrderService orderService, IOrderProcessingService orderProcessingService, IOrderTotalCalculationService orderTotalCalculationService, ICustomerService customerService, ISettingService settingService, IProductService productService, IAuthenticationService authenticationService, IPictureService pictureService, IVendorService vendorService)
         {
             this._orderService = orderService;
             this._orderProcessingService = orderProcessingService;
             this._orderTotalCalculationService = orderTotalCalculationService;
             this._customerService = customerService;
             this._settingService = settingService;
+            this._productService = productService;
+            this._authenticationService = authenticationService;
+            this._pictureService = pictureService;
+            this._vendorService = vendorService;
 
             _rposSettings = _settingService.LoadSetting<RailPointofSaleSettings>();
         }
@@ -78,7 +93,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 PaymentMethodSystemName = "Payments.CheckMoneyOrder",
                 OrderStatus = OrderStatus.Pending,
                 CustomerCurrencyCode = "USD",
-                CreatedOnUtc = DateTime.Now.ToUniversalTime()
+                CreatedOnUtc = DateTime.Now.ToUniversalTime(),
             };
 
             //add order
@@ -93,33 +108,75 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
         public ActionResult Edit(int id)
         {
-            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", null);
+            RailPointofSaleOrderModel model = new RailPointofSaleOrderModel();
+
+            //get a list of products for this store
+            var products = _productService.SearchProducts(
+                    storeId: _rposSettings.StoreId,
+                    visibleIndividuallyOnly: true,
+                    orderBy: ProductSortingEnum.NameAsc,
+                    pageSize: 100 );
+
+            //loop each product and add
+            foreach (var prod in products)
+            {
+                //get picture
+                var picture = prod.ProductPictures.FirstOrDefault();
+
+                string imageUrl = "";
+
+                if (picture != null)
+                {
+                    imageUrl = _pictureService.GetPictureUrl(picture.Id, targetSize: 75);
+                }
+                else
+                {
+                    imageUrl = _pictureService.GetDefaultPictureUrl(targetSize: 75);
+                }
+
+                //get vendor
+                string vendorname = "";
+
+                if (prod.VendorId != 0)
+                {
+                    vendorname = _vendorService.GetVendorById(prod.VendorId).Name;
+                }
+
+                //add item
+                var rposp = new rPOSProduct {
+                    Id = prod.Id,
+                    Sku = prod.Sku,
+                    Vendor = vendorname,
+                    Name = prod.Name,
+                    Price = prod.Price,
+                    ProductThumbnail = imageUrl
+                };
+
+                //add to model
+                model.AvailableProducts.Add(rposp);
+            }
+
+
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
         }
+
+        #region Products
+
+
+
+        #endregion
 
         #region Customer
 
         private Customer GetCustomer()
         {
             string posCustomerEmail = "rpos_customer@do_not_use.com";
-            string posCustomerUserName = "rPOSCustomer";
+            string posCustomerUserName = "rPOSCustomer_" + _authenticationService.GetAuthenticatedCustomer().Id.ToString();
 
             Customer posCustomer = _customerService.GetCustomerByUsername(posCustomerUserName);
 
             if (posCustomer == null)
             {
-                //create billing/shipping address
-                Address posAddress = new Address
-                {
-                    Address1 = _rposSettings.StoreAddress,
-                    City = _rposSettings.StoreCity,
-                    StateProvinceId = _rposSettings.StoreStateProvinceId,
-                    ZipPostalCode = _rposSettings.StorePostalCode,
-                    CountryId = _rposSettings.StoreCountryId,
-                    FirstName = "rPOS",
-                    LastName = "Customer",
-                    CreatedOnUtc = DateTime.UtcNow
-                };
-
                 //create customer
                 Guid posCustomerGuid = Guid.NewGuid();
 
@@ -139,30 +196,30 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
                 //get new customer
                 posCustomer = _customerService.GetCustomerByGuid(posCustomerGuid);
-
-                //add address
-                posCustomer.Addresses.Add(posAddress);
-                posCustomer.BillingAddress = posAddress;
-                posCustomer.ShippingAddress = posAddress;
-                _customerService.UpdateCustomer(posCustomer);
-
-                //return customer
-                return posCustomer;
             }
-            else
+
+            //create billing/shipping address
+            Address posAddress = new Address
             {
-                //update billing / shipping address
-                posCustomer.ShippingAddress.Address1 = _rposSettings.StoreAddress;
-                posCustomer.ShippingAddress.City = _rposSettings.StoreCity;
-                posCustomer.ShippingAddress.StateProvinceId = _rposSettings.StoreStateProvinceId;
-                posCustomer.ShippingAddress.ZipPostalCode = _rposSettings.StorePostalCode;
-                posCustomer.ShippingAddress.CountryId = _rposSettings.StoreCountryId;
-                posCustomer.BillingAddress = posCustomer.ShippingAddress;
-                _customerService.UpdateCustomer(posCustomer);
+                Address1 = _rposSettings.StoreAddress,
+                City = _rposSettings.StoreCity,
+                StateProvinceId = _rposSettings.StoreStateProvinceId,
+                ZipPostalCode = _rposSettings.StorePostalCode,
+                CountryId = _rposSettings.StoreCountryId,
+                FirstName = "rPOS",
+                LastName = "Customer",
+                CreatedOnUtc = DateTime.UtcNow
+            };
 
-                //return POS Customer
-                return posCustomer;
-            }
+            //add address
+            posCustomer.Addresses.Add(posAddress);
+            posCustomer.BillingAddress = posAddress;
+            posCustomer.ShippingAddress = posAddress;
+            _customerService.UpdateCustomer(posCustomer);
+
+            //return customer with new address
+            return posCustomer;
+
         }
 
         #endregion
