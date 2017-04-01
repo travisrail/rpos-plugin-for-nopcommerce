@@ -50,6 +50,9 @@
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
     </Reference>
+    <Reference Include="Nop.Admin">
+      <HintPath>..\..\..\..\..\Documents\Visual Studio 2015\Projects\nopCommerce_3.80_Source\Presentation\Nop.Web\bin\Nop.Admin.dll</HintPath>
+    </Reference>
     <Reference Include="Nop.Core">
       <HintPath>..\..\..\..\Visual Studio 2015\Projects\nopCommerce_3.80_Source\Presentation\Nop.Web.Framework\bin\Debug\Nop.Core.dll</HintPath>
     </Reference>
@@ -106,6 +109,8 @@
     <Content Include="Views\PointofSaleOrder\Add.cshtml" />
     <Content Include="Views\PointofSaleOrder\Edit.cshtml" />
     <Content Include="Views\Configuration\Configure.cshtml" />
+    <Content Include="Views\PointofSaleOrder\AddProductToPointofSaleOrder.cshtml" />
+    <Content Include="Views\PointofSaleOrder\_ProductAddAttributes.cshtml" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
     </None>

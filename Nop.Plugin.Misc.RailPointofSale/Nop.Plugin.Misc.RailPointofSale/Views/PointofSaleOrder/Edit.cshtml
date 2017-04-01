@@ -47,11 +47,9 @@
                             @foreach (var product in Model.AvailableProducts)
                             {
                                 <tr>
-                                    <td></td>
+                                    <td><button type="button" onclick="addProductToOrder(@product.Id.ToString())" class="btn btn-default">@T("Admin.Common.Select")</button></td>
                                     <td>@product.Id</td>
-                                    <td>
-                                        <img src="@product.ProductThumbnail" />
-                                    </td>
+                                    <td><img src="@product.ProductThumbnail" /></td>
                                     <td>@product.Vendor</td>
                                     <td>@product.Sku</td>
                                     <td>@product.Name</td>
@@ -67,6 +65,13 @@
                                 sortable: true
                             });
                         });
+
+                        function addProductToOrder(productId) {
+                            //load "product details page" block
+                            var productDetailsActionUrl = '@Html.Raw(Url.Action("AddProductToPOSOrderDetails", "PointofSaleOrder", new {orderId = Model.Id, productId = "productidplaceholder"}))';
+                            productDetailsActionUrl = productDetailsActionUrl.replace("productidplaceholder", productId);
+                            setLocation(productDetailsActionUrl);
+                        }
                     </script>
                 </div>
                 <div id="tab2" class="tab-pane fade">

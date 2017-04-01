@@ -17,6 +17,12 @@ using Nop.Services.Authentication;
 using Nop.Plugin.Misc.RailPointofSale.Models;
 using Nop.Services.Media;
 using Nop.Services.Vendors;
+using Nop.Admin.Models.Orders;
+using Nop.Services.Tax;
+using Nop.Core.Domain.Tax;
+using Nop.Core.Domain.Shipping;
+using Nop.Services.Logging;
+using Nop.Services.Localization;
 
 namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 {
@@ -32,11 +38,34 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         private readonly IAuthenticationService _authenticationService;
         private readonly IPictureService _pictureService;
         private readonly IVendorService _vendorService;
+        private readonly IPriceCalculationService _priceCalculationService;
+        private readonly ITaxService _taxService;
+        private readonly IProductAttributeService _productAttributeService;
+        private readonly IProductAttributeParser _productAttributeParser;
+        private readonly IShoppingCartService _shoppingCartService;
+        private readonly IProductAttributeFormatter _productAttributeFormatter;
+        private readonly ICustomerActivityService _customerActivityService;
+        private readonly ILocalizationService _localizationService;
+        private readonly IGiftCardService _giftCardService;
+        private readonly IDownloadService _downloadService;
 
         private RailPointofSaleSettings _rposSettings;
+
+        private readonly OrderSettings _orderSettings;
+        private readonly CurrencySettings _currencySettings;
+        private readonly TaxSettings _taxSettings;
+        private readonly MeasureSettings _measureSettings;
+        private readonly AddressSettings _addressSettings;
+        private readonly ShippingSettings _shippingSettings;
         #endregion
 
-        public PointofSaleOrderController(IOrderService orderService, IOrderProcessingService orderProcessingService, IOrderTotalCalculationService orderTotalCalculationService, ICustomerService customerService, ISettingService settingService, IProductService productService, IAuthenticationService authenticationService, IPictureService pictureService, IVendorService vendorService)
+        public PointofSaleOrderController(IOrderService orderService, IOrderProcessingService orderProcessingService, IOrderTotalCalculationService orderTotalCalculationService, ICustomerService customerService, ISettingService settingService, IProductService productService, IAuthenticationService authenticationService, IPictureService pictureService, IVendorService vendorService, IPriceCalculationService priceCalculationService, ITaxService taxService, IProductAttributeService productAttributeService, IProductAttributeParser productAttributeParser, IShoppingCartService shoppingCartService, IProductAttributeFormatter productAttributeFormatter, ICustomerActivityService customerActivityService, ILocalizationService localizationService, IGiftCardService giftCardService, IDownloadService downloadService,
+            OrderSettings orderSettings,
+            CurrencySettings currencySettings,
+            TaxSettings taxSettings,
+            MeasureSettings measureSettings,
+            AddressSettings addressSettings,
+            ShippingSettings shippingSettings)
         {
             this._orderService = orderService;
             this._orderProcessingService = orderProcessingService;
@@ -47,6 +76,22 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             this._authenticationService = authenticationService;
             this._pictureService = pictureService;
             this._vendorService = vendorService;
+            this._priceCalculationService = priceCalculationService;
+            this._taxService = taxService;
+            this._productAttributeService = productAttributeService;
+            this._productAttributeParser = productAttributeParser;
+            this._shoppingCartService = shoppingCartService;
+            this._productAttributeFormatter = productAttributeFormatter;
+            this._customerActivityService = customerActivityService;
+            this._localizationService = localizationService;
+            this._giftCardService = giftCardService;
+            this._downloadService = downloadService;
+
+            this._orderSettings = orderSettings;
+            this._taxSettings = taxSettings;
+            this._measureSettings = measureSettings;
+            this._addressSettings = addressSettings;
+            this._shippingSettings = shippingSettings;
 
             _rposSettings = _settingService.LoadSetting<RailPointofSaleSettings>();
         }
@@ -108,7 +153,9 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
         public ActionResult Edit(int id)
         {
+            //create model
             RailPointofSaleOrderModel model = new RailPointofSaleOrderModel();
+            model.Id = id;
 
             //get a list of products for this store
             var products = _productService.SearchProducts(
@@ -121,9 +168,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             foreach (var prod in products)
             {
                 //get picture
-                var picture = prod.ProductPictures.FirstOrDefault();
-
                 string imageUrl = "";
+                var picture = _pictureService.GetPicturesByProductId(prod.Id, 1).FirstOrDefault();
 
                 if (picture != null)
                 {
@@ -163,6 +209,393 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         #region Products
 
 
+
+        #endregion
+
+        #region Add Products to Order
+
+        public ActionResult AddProductToPOSOrderDetails(int orderId, int productId)
+        {
+            var model = PrepareAddProductToPOSOrderModel(orderId, productId);
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductToPointofSaleOrder.cshtml", model);
+        }
+
+        [HttpPost]
+        public ActionResult AddProductToPOSOrderDetails(int orderId, int productId, FormCollection form)
+        {
+            var order = _orderService.GetOrderById(orderId);
+            var product = _productService.GetProductById(productId);
+            //save order item
+
+            //basic properties
+            decimal unitPriceInclTax;
+            decimal.TryParse(form["UnitPriceInclTax"], out unitPriceInclTax);
+            decimal unitPriceExclTax;
+            decimal.TryParse(form["UnitPriceExclTax"], out unitPriceExclTax);
+            int quantity;
+            int.TryParse(form["Quantity"], out quantity);
+            decimal priceInclTax;
+            decimal.TryParse(form["SubTotalInclTax"], out priceInclTax);
+            decimal priceExclTax;
+            decimal.TryParse(form["SubTotalExclTax"], out priceExclTax);
+
+            //warnings
+            var warnings = new List<string>();
+
+            //attributes
+            var attributesXml = ParseProductAttributes(product, form);
+
+            #region Gift cards
+
+            string recipientName = "";
+            string recipientEmail = "";
+            string senderName = "";
+            string senderEmail = "";
+            string giftCardMessage = "";
+            if (product.IsGiftCard)
+            {
+                foreach (string formKey in form.AllKeys)
+                {
+                    if (formKey.Equals("giftcard.RecipientName", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        recipientName = form[formKey];
+                        continue;
+                    }
+                    if (formKey.Equals("giftcard.RecipientEmail", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        recipientEmail = form[formKey];
+                        continue;
+                    }
+                    if (formKey.Equals("giftcard.SenderName", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        senderName = form[formKey];
+                        continue;
+                    }
+                    if (formKey.Equals("giftcard.SenderEmail", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        senderEmail = form[formKey];
+                        continue;
+                    }
+                    if (formKey.Equals("giftcard.Message", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        giftCardMessage = form[formKey];
+                        continue;
+                    }
+                }
+
+                attributesXml = _productAttributeParser.AddGiftCardAttribute(attributesXml,
+                    recipientName, recipientEmail, senderName, senderEmail, giftCardMessage);
+            }
+
+            #endregion
+
+            #region Rental product
+
+            DateTime? rentalStartDate = null;
+            DateTime? rentalEndDate = null;
+            if (product.IsRental)
+            {
+                throw new Exception("Rental support net yet implemented.");
+            }
+
+            #endregion
+
+            //warnings
+            warnings.AddRange(_shoppingCartService.GetShoppingCartItemAttributeWarnings(order.Customer, ShoppingCartType.ShoppingCart, product, quantity, attributesXml));
+            warnings.AddRange(_shoppingCartService.GetShoppingCartItemGiftCardWarnings(ShoppingCartType.ShoppingCart, product, attributesXml));
+            warnings.AddRange(_shoppingCartService.GetRentalProductWarnings(product, rentalStartDate, rentalEndDate));
+            if (!warnings.Any())
+            {
+                //no errors
+
+                //attributes
+                var attributeDescription = _productAttributeFormatter.FormatAttributes(product, attributesXml, order.Customer);
+
+                //save item
+                var orderItem = new OrderItem
+                {
+                    OrderItemGuid = Guid.NewGuid(),
+                    Order = order,
+                    ProductId = product.Id,
+                    UnitPriceInclTax = unitPriceInclTax,
+                    UnitPriceExclTax = unitPriceExclTax,
+                    PriceInclTax = priceInclTax,
+                    PriceExclTax = priceExclTax,
+                    OriginalProductCost = _priceCalculationService.GetProductCost(product, attributesXml),
+                    AttributeDescription = attributeDescription,
+                    AttributesXml = attributesXml,
+                    Quantity = quantity,
+                    DiscountAmountInclTax = decimal.Zero,
+                    DiscountAmountExclTax = decimal.Zero,
+                    DownloadCount = 0,
+                    IsDownloadActivated = false,
+                    LicenseDownloadId = 0,
+                    RentalStartDateUtc = rentalStartDate,
+                    RentalEndDateUtc = rentalEndDate
+                };
+                order.OrderItems.Add(orderItem);
+                _orderService.UpdateOrder(order);
+
+                //adjust inventory
+                _productService.AdjustInventory(orderItem.Product, -orderItem.Quantity, orderItem.AttributesXml);
+
+                //update order totals
+                var updateOrderParameters = new UpdateOrderParameters
+                {
+                    UpdatedOrder = order,
+                    UpdatedOrderItem = orderItem,
+                    PriceInclTax = unitPriceInclTax,
+                    PriceExclTax = unitPriceExclTax,
+                    SubTotalInclTax = priceInclTax,
+                    SubTotalExclTax = priceExclTax,
+                    Quantity = quantity
+                };
+                _orderProcessingService.UpdateOrderTotals(updateOrderParameters);
+
+                //add a note
+                order.OrderNotes.Add(new OrderNote
+                {
+                    Note = "A new order item has been added",
+                    DisplayToCustomer = false,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+                _orderService.UpdateOrder(order);
+                LogEditOrder(order.Id);
+
+                //gift cards
+                if (product.IsGiftCard)
+                {
+                    for (int i = 0; i < orderItem.Quantity; i++)
+                    {
+                        var gc = new GiftCard
+                        {
+                            GiftCardType = product.GiftCardType,
+                            PurchasedWithOrderItem = orderItem,
+                            Amount = unitPriceExclTax,
+                            IsGiftCardActivated = false,
+                            GiftCardCouponCode = _giftCardService.GenerateGiftCardCode(),
+                            RecipientName = recipientName,
+                            RecipientEmail = recipientEmail,
+                            SenderName = senderName,
+                            SenderEmail = senderEmail,
+                            Message = giftCardMessage,
+                            IsRecipientNotified = false,
+                            CreatedOnUtc = DateTime.UtcNow
+                        };
+                        _giftCardService.InsertGiftCard(gc);
+                    }
+                }
+
+                //redirect to order details page
+                TempData["nop.admin.order.warnings"] = updateOrderParameters.Warnings;
+                return RedirectToAction("Edit", "PointofSaleOrder", new { id = order.Id });
+            }
+
+            //errors
+            var model = PrepareAddProductToPOSOrderModel(order.Id, product.Id);
+            model.Warnings.AddRange(warnings);
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductToPointofSaleOrder.cshtml", model);
+        }
+
+        [NonAction]
+        protected virtual OrderModel.AddOrderProductModel.ProductDetailsModel PrepareAddProductToPOSOrderModel(int orderId, int productId)
+        {
+            var product = _productService.GetProductById(productId);
+            if (product == null)
+                throw new ArgumentException("No product found with the specified id");
+
+            var order = _orderService.GetOrderById(orderId);
+            if (order == null)
+                throw new ArgumentException("No order found with the specified id");
+
+            var presetQty = 1;
+            var presetPrice = _priceCalculationService.GetFinalPrice(product, order.Customer, decimal.Zero, true, presetQty);
+            decimal taxRate;
+            decimal presetPriceInclTax = _taxService.GetProductPrice(product, presetPrice, true, order.Customer, out taxRate);
+            decimal presetPriceExclTax = _taxService.GetProductPrice(product, presetPrice, false, order.Customer, out taxRate);
+
+            var model = new OrderModel.AddOrderProductModel.ProductDetailsModel
+            {
+                ProductId = productId,
+                OrderId = orderId,
+                Name = product.Name,
+                ProductType = product.ProductType,
+                UnitPriceExclTax = presetPriceExclTax,
+                UnitPriceInclTax = presetPriceInclTax,
+                Quantity = presetQty,
+                SubTotalExclTax = presetPriceExclTax,
+                SubTotalInclTax = presetPriceInclTax,
+                AutoUpdateOrderTotals = _orderSettings.AutoUpdateOrderTotalsOnEditingOrder
+            };
+
+            //attributes
+            var attributes = _productAttributeService.GetProductAttributeMappingsByProductId(product.Id);
+            foreach (var attribute in attributes)
+            {
+                var attributeModel = new OrderModel.AddOrderProductModel.ProductAttributeModel
+                {
+                    Id = attribute.Id,
+                    ProductAttributeId = attribute.ProductAttributeId,
+                    Name = attribute.ProductAttribute.Name,
+                    TextPrompt = attribute.TextPrompt,
+                    IsRequired = attribute.IsRequired,
+                    AttributeControlType = attribute.AttributeControlType,
+                    HasCondition = !String.IsNullOrEmpty(attribute.ConditionAttributeXml)
+                };
+                if (!String.IsNullOrEmpty(attribute.ValidationFileAllowedExtensions))
+                {
+                    attributeModel.AllowedFileExtensions = attribute.ValidationFileAllowedExtensions
+                        .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                        .ToList();
+                }
+
+                if (attribute.ShouldHaveValues())
+                {
+                    //values
+                    var attributeValues = _productAttributeService.GetProductAttributeValues(attribute.Id);
+                    foreach (var attributeValue in attributeValues)
+                    {
+                        var attributeValueModel = new OrderModel.AddOrderProductModel.ProductAttributeValueModel
+                        {
+                            Id = attributeValue.Id,
+                            Name = attributeValue.Name,
+                            IsPreSelected = attributeValue.IsPreSelected
+                        };
+                        attributeModel.Values.Add(attributeValueModel);
+                    }
+                }
+
+                model.ProductAttributes.Add(attributeModel);
+            }
+            model.HasCondition = model.ProductAttributes.Any(a => a.HasCondition);
+            //gift card
+            model.GiftCard.IsGiftCard = product.IsGiftCard;
+            if (model.GiftCard.IsGiftCard)
+            {
+                model.GiftCard.GiftCardType = product.GiftCardType;
+            }
+            //rental
+            model.IsRental = product.IsRental;
+            return model;
+        }
+
+        [NonAction]
+        protected virtual string ParseProductAttributes(Product product, FormCollection form)
+        {
+            var attributesXml = string.Empty;
+
+            #region Product attributes
+
+            var productAttributes = _productAttributeService.GetProductAttributeMappingsByProductId(product.Id);
+            foreach (var attribute in productAttributes)
+            {
+                var controlId = string.Format("product_attribute_{0}", attribute.Id);
+                switch (attribute.AttributeControlType)
+                {
+                    case AttributeControlType.DropdownList:
+                    case AttributeControlType.RadioList:
+                    case AttributeControlType.ColorSquares:
+                    case AttributeControlType.ImageSquares:
+                        {
+                            var ctrlAttributes = form[controlId];
+                            if (!String.IsNullOrEmpty(ctrlAttributes))
+                            {
+                                int selectedAttributeId = int.Parse(ctrlAttributes);
+                                if (selectedAttributeId > 0)
+                                    attributesXml = _productAttributeParser.AddProductAttribute(attributesXml,
+                                        attribute, selectedAttributeId.ToString());
+                            }
+                        }
+                        break;
+                    case AttributeControlType.Checkboxes:
+                        {
+                            var ctrlAttributes = form[controlId];
+                            if (!String.IsNullOrEmpty(ctrlAttributes))
+                            {
+                                foreach (var item in ctrlAttributes.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    int selectedAttributeId = int.Parse(item);
+                                    if (selectedAttributeId > 0)
+                                        attributesXml = _productAttributeParser.AddProductAttribute(attributesXml,
+                                            attribute, selectedAttributeId.ToString());
+                                }
+                            }
+                        }
+                        break;
+                    case AttributeControlType.ReadonlyCheckboxes:
+                        {
+                            //load read-only (already server-side selected) values
+                            var attributeValues = _productAttributeService.GetProductAttributeValues(attribute.Id);
+                            foreach (var selectedAttributeId in attributeValues
+                                .Where(v => v.IsPreSelected)
+                                .Select(v => v.Id)
+                                .ToList())
+                            {
+                                attributesXml = _productAttributeParser.AddProductAttribute(attributesXml,
+                                    attribute, selectedAttributeId.ToString());
+                            }
+                        }
+                        break;
+                    case AttributeControlType.TextBox:
+                    case AttributeControlType.MultilineTextbox:
+                        {
+                            var ctrlAttributes = form[controlId];
+                            if (!String.IsNullOrEmpty(ctrlAttributes))
+                            {
+                                string enteredText = ctrlAttributes.Trim();
+                                attributesXml = _productAttributeParser.AddProductAttribute(attributesXml,
+                                    attribute, enteredText);
+                            }
+                        }
+                        break;
+                    case AttributeControlType.Datepicker:
+                        {
+                            var day = form[controlId + "_day"];
+                            var month = form[controlId + "_month"];
+                            var year = form[controlId + "_year"];
+                            DateTime? selectedDate = null;
+                            try
+                            {
+                                selectedDate = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day));
+                            }
+                            catch { }
+                            if (selectedDate.HasValue)
+                            {
+                                attributesXml = _productAttributeParser.AddProductAttribute(attributesXml,
+                                    attribute, selectedDate.Value.ToString("D"));
+                            }
+                        }
+                        break;
+                    case AttributeControlType.FileUpload:
+                        {
+                            Guid downloadGuid;
+                            Guid.TryParse(form[controlId], out downloadGuid);
+                            var download = _downloadService.GetDownloadByGuid(downloadGuid);
+                            if (download != null)
+                            {
+                                attributesXml = _productAttributeParser.AddProductAttribute(attributesXml,
+                                        attribute, download.DownloadGuid.ToString());
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            //validate conditional attributes (if specified)
+            foreach (var attribute in productAttributes)
+            {
+                var conditionMet = _productAttributeParser.IsConditionMet(attribute, attributesXml);
+                if (conditionMet.HasValue && !conditionMet.Value)
+                {
+                    attributesXml = _productAttributeParser.RemoveProductAttribute(attributesXml, attribute);
+                }
+            }
+
+            #endregion
+
+            return attributesXml;
+        }
 
         #endregion
 
@@ -220,6 +653,16 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //return customer with new address
             return posCustomer;
 
+        }
+
+        #endregion
+
+        #region Activity log
+
+        [NonAction]
+        protected void LogEditOrder(int orderId)
+        {
+            _customerActivityService.InsertActivity("EditOrder", _localizationService.GetResource("ActivityLog.EditOrder"), orderId);
         }
 
         #endregion

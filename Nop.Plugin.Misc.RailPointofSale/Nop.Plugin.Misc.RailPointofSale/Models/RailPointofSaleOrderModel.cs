@@ -15,6 +15,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Models
             AvailableProducts = new List<rPOSProduct>();
         }
 
+        public int Id { get; set; }
+
         public List<rPOSProduct> AvailableProducts { get; set; }
     }
 
