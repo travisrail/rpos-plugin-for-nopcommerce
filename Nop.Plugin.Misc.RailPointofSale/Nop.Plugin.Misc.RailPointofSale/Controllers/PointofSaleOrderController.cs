@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using System.Web.Mvc;
+using System.Web.Routing;
 using Nop.Admin.Extensions;
 using Nop.Admin.Helpers;
 using Nop.Admin.Models.Orders;
@@ -39,6 +40,7 @@ using Nop.Services.Vendors;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Kendoui;
 using Nop.Web.Framework.Mvc;
+using Nop.Web.Models.Checkout;
 
 using Nop.Plugin.Misc.RailPointofSale.Models;
 using Nop.Services.Configuration;
@@ -95,6 +97,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         private readonly ISettingService _settingService;
         private readonly IAuthenticationService _authenticationService;
         private readonly ICustomerService _customerService;
+        private readonly IGenericAttributeService _genericAttributeService;
 
         private readonly OrderSettings _orderSettings;
         private readonly CurrencySettings _currencySettings;
@@ -154,6 +157,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             ISettingService settingService,
             IAuthenticationService authenticationService,
             ICustomerService customerService,
+            IGenericAttributeService genericAttributeService,
             OrderSettings orderSettings,
             CurrencySettings currencySettings,
             TaxSettings taxSettings,
@@ -206,6 +210,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             this._settingService = settingService;
             this._authenticationService = authenticationService;
             this._customerService = customerService;
+            this._genericAttributeService = genericAttributeService;
             this._orderSettings = orderSettings;
             this._currencySettings = currencySettings;
             this._taxSettings = taxSettings;
@@ -257,7 +262,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 ShippingAddressId = posCustomer.ShippingAddress.Id,
                 ShippingStatusId = 10,
                 PaymentStatusId = 10,
-                PaymentMethodSystemName = "Payments.CheckMoneyOrder",
+                PaymentMethodSystemName = _rposSettings.StorePaymentMethodSystemName,
                 OrderStatus = OrderStatus.Pending,
                 CustomerCurrencyCode = "USD",
                 CreatedOnUtc = DateTime.Now.ToUniversalTime(),
@@ -712,12 +717,6 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
         #endregion
 
-        #region Products
-
-
-
-        #endregion
-
         #region Add Products to Order
 
         public ActionResult AddProductToPOSOrderDetails(int orderId, int productId)
@@ -900,7 +899,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //errors
             var model = PrepareAddProductToPOSOrderModel(order.Id, product.Id);
             model.Warnings.AddRange(warnings);
-            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductToPointofSaleOrder.cshtml", model);
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductTorPosOrderModel.cshtml", model);
         }
 
         [NonAction]
@@ -1159,6 +1158,147 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //return customer with new address
             return posCustomer;
 
+        }
+
+        #endregion
+
+        #region Process Payment
+
+        public ActionResult ProcessPointofSaleOrder(int id)
+        {
+            //create order model
+            var order = _orderService.GetOrderById(id);
+            RailPointofSaleOrderModel _rPOSOrderModel = new RailPointofSaleOrderModel();
+            PrepareOrderDetailsModel(_rPOSOrderModel, order);
+
+            //load payment method
+            var paymentMethod = _paymentService.LoadPaymentMethodBySystemName(order.PaymentMethodSystemName);
+            if (paymentMethod == null)
+                throw new Exception("Null payment method not yet implemented.");
+
+            //model
+            var model = PreparePointofSalePaymentInfoModel(paymentMethod, _rPOSOrderModel);
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/ProcessPointofSaleOrder.cshtml", model);
+        }
+
+        [HttpPost]
+        public ActionResult EnterPaymentInfo(FormCollection form)
+        {
+            //create order model
+            int orderId = Convert.ToInt32(form["rPosOrderModel.Id"]);
+            string customerEmail = form["CustomerEmailAddress"];
+            var order = _orderService.GetOrderById(orderId);
+            RailPointofSaleOrderModel _rPOSOrderModel = new RailPointofSaleOrderModel();
+            PrepareOrderDetailsModel(_rPOSOrderModel, order);
+
+            //load payment method
+            var paymentMethod = _paymentService.LoadPaymentMethodBySystemName(order.PaymentMethodSystemName);
+            if (paymentMethod == null)
+                throw new Exception("Null payment method not yet implemented.");
+
+            var paymentControllerType = paymentMethod.GetControllerType();
+            var paymentController = DependencyResolver.Current.GetService(paymentControllerType) as BasePaymentController;
+            if (paymentController == null)
+                throw new Exception("Payment controller cannot be loaded");
+
+            var warnings = paymentController.ValidatePaymentForm(form);
+            foreach (var warning in warnings)
+                ModelState.AddModelError("", warning);
+            if (ModelState.IsValid)
+            {
+                //process payment request
+                var processPaymentRequest = paymentController.GetPaymentInfo(form);
+                processPaymentRequest.OrderGuid = order.OrderGuid;
+                processPaymentRequest.OrderTotal = order.OrderTotal;
+                processPaymentRequest.PaymentMethodSystemName = order.PaymentMethodSystemName;
+                var paymentResult = _paymentService.ProcessPayment(processPaymentRequest);
+
+                if (paymentResult.Success) //we successfully processed the credi card payment
+                {
+                    //update order payment status
+                    UpdateSuccessfulOrder(order, paymentResult, processPaymentRequest, customerEmail);
+
+                    //redriect back to finished screen
+                    RedirectToAction("Edit", "PointofSaleOrder", new { id = order.Id });
+                }
+            }
+
+            //model
+            var model = PreparePointofSalePaymentInfoModel(paymentMethod, _rPOSOrderModel);
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/ProcessPointofSaleOrder.cshtml", model);
+        }
+
+        [NonAction]
+        protected virtual PointofSalePaymentInfoModel PreparePointofSalePaymentInfoModel(IPaymentMethod paymentMethod, RailPointofSaleOrderModel _rPOSOrderModel)
+        {
+            var model = new PointofSalePaymentInfoModel();
+            string actionName;
+            string controllerName;
+            RouteValueDictionary routeValues;
+            paymentMethod.GetPaymentInfoRoute(out actionName, out controllerName, out routeValues);
+            model.PaymentInfoActionName = actionName;
+            model.PaymentInfoControllerName = controllerName;
+            model.PaymentInfoRouteValues = routeValues;
+            model.DisplayOrderTotals = _orderSettings.OnePageCheckoutDisplayOrderTotalsOnPaymentInfoTab;
+            model.rPosOrderModel = _rPOSOrderModel;
+            return model;
+        }
+
+        [NonAction]
+        protected virtual void UpdateSuccessfulOrder(Order order, ProcessPaymentResult result, ProcessPaymentRequest request, String customerEmail)
+        {
+            //update order payment status
+            //order status
+            order.OrderStatus = OrderStatus.Complete;
+            order.PaymentStatus = PaymentStatus.Paid;
+            order.ShippingStatus = ShippingStatus.ShippingNotRequired;
+            
+            //order transaction data
+            order.AuthorizationTransactionCode = result.AuthorizationTransactionCode;
+            order.AuthorizationTransactionId = result.AuthorizationTransactionId;
+            order.AuthorizationTransactionResult = result.AuthorizationTransactionResult;
+            order.CaptureTransactionId = result.CaptureTransactionId;
+            order.CaptureTransactionResult = result.CaptureTransactionResult;
+            order.SubscriptionTransactionId = result.SubscriptionTransactionId;
+            
+            //order email address
+            order.ShippingAddress.Email = customerEmail;
+            order.BillingAddress.Email = customerEmail;
+
+            //update ordername
+            order.ShippingAddress.FirstName = request.CreditCardName;
+            order.BillingAddress.FirstName = request.CreditCardName;
+
+            //update order
+            _orderService.UpdateOrder(order);
+
+            //create shipments
+            Shipment shipm = new Shipment
+            {
+                AdminComment = "Auto shipment for POS sale!",
+                CreatedOnUtc = DateTime.Now.ToUniversalTime(),
+                ShippedDateUtc = DateTime.Now.ToUniversalTime(),
+                DeliveryDateUtc = DateTime.Now.ToUniversalTime(),
+                OrderId = order.Id,
+                TotalWeight = 0M,
+                TrackingNumber = ""
+            };
+
+            //add shipment items
+            foreach (var item in order.OrderItems)
+            {
+                ShipmentItem si = new ShipmentItem {
+                    OrderItemId = item.Id,
+                    Quantity = item.Quantity
+                };
+
+                shipm.ShipmentItems.Add(si);
+            }
+
+            //update in database
+            _shipmentService.InsertShipment(shipm);
+   
+            //send customer email
         }
 
         #endregion

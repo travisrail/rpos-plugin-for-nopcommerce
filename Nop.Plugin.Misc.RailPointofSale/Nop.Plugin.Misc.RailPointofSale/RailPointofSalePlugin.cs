@@ -59,6 +59,7 @@ namespace Nop.Plugin.Misc.RailPointofSale
                 StoreStateProvinceId = 0,
                 StorePostalCode = "",
                 StoreCountryId = 0,
+                StorePaymentMethodSystemName = ""
             };
             _settingService.SaveSetting(settings);
 
@@ -79,6 +80,9 @@ namespace Nop.Plugin.Misc.RailPointofSale
 
             this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId", "Store Country");
             this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId.Hint", "The country your point-of-sale store is located in. Can be useful for tax calculation.");
+
+            this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName", "Store Payment Method");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName.Hint", "Select the payment method that will be used for the point-of-sale store.");
 
             base.Install();
         }
@@ -104,6 +108,9 @@ namespace Nop.Plugin.Misc.RailPointofSale
 
             this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId");
             this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId.Hint");
+
+            this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName");
+            this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName.Hint");
 
             base.Uninstall();
         }

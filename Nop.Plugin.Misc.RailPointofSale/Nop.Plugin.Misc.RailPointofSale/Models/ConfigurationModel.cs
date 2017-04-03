@@ -14,6 +14,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Model
             AvailableStores = new List<SelectListItem>();
             AvailableStateProvice = new List<SelectListItem>();
             AvailableCountries = new List<SelectListItem>();
+            AvailablePaymentMethods = new List<SelectListItem>();
         }
 
         [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StoreId")]
@@ -45,8 +46,14 @@ namespace Nop.Plugin.Misc.RailPointofSale.Model
         public int StoreCountryId { get; set; }
         public bool StoreCountryId_OverrideForStore { get; set; }
 
+        [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName")]
+        [AllowHtml]
+        public string StorePaymentMethodSystemName { get; set; }
+        public bool StorePaymentMethodSystemName_OverrideForStore { get; set; }
+
         public IList<SelectListItem> AvailableStores { get; set; }
         public IList<SelectListItem> AvailableStateProvice { get; set; }
         public IList<SelectListItem> AvailableCountries { get; set; }
+        public IList<SelectListItem> AvailablePaymentMethods { get; set; }
     }
 }

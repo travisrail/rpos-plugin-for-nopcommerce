@@ -13,7 +13,7 @@
 <div class="content-header clearfix">
     <h1 class="pull-left">New rPOS Order - #@Model.Id.ToString()</h1>
     <div class="pull-right">
-        <button type="submit" name="process-order" class="btn bg-green">
+        <button type="submit" name="process-order" class="btn bg-green" onclick="location.href='@Url.Action("ProcessPointofSaleOrder", "PointofSaleOrder", new { id = Model.Id })'">
             <i class="fa fa-usd"></i>
             Process Order
         </button>

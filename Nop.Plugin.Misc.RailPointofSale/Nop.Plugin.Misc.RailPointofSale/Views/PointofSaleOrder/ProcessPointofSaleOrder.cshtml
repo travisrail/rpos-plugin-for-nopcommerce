@@ -1,0 +1,128 @@
+﻿@model PointofSalePaymentInfoModel
+@using Nop.Plugin.Misc.RailPointofSale.Models
+
+@{
+    Layout = "~/Administration/Views/Shared/_AdminLayout.cshtml";
+
+}
+
+@Html.AntiForgeryToken()
+<style>
+    .payment-info input, .payment-info select {
+        height: 36px;
+        border: 1px solid #ddd;
+        padding: 8px;
+        vertical-align: middle;
+        margin-bottom: 5px;
+    }
+</style>
+
+<div class="content-header clearfix">
+    <h1 class="pull-left">Process rPOS Order - #@Model.rPosOrderModel.Id.ToString()</h1>
+</div>
+
+<div class="content">
+    <div class="form-horizontal">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-body">
+                        <h2>Order Summary</h2>
+                        <div class="form-group">
+                            <div class="col-md-4">
+                                @Html.NopLabelFor(model => model.rPosOrderModel.Id)
+                            </div>
+                            <div class="col-md-6">
+                                @Html.NopDisplayFor(model => model.rPosOrderModel.Id)
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-md-4">
+                                @Html.NopLabelFor(model => model.rPosOrderModel.StoreName)
+                            </div>
+                            <div class="col-md-6">
+                                @Html.NopDisplayFor(model => model.rPosOrderModel.StoreName)
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-md-4">
+                                <div class="label-wrapper">
+                                    <label class="control-label">@T("Admin.Orders.Fields.OrderSubtotal")</label>
+                                    <div class="ico-help" title="@T("Admin.Orders.Fields.OrderSubtotal.Hint")">
+                                        <i class="fa fa-question-circle"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="form-text-row">
+                                    @Html.DisplayFor(model => model.rPosOrderModel.OrderSubtotalInclTax)
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-md-4">
+                                @Html.NopLabelFor(model => model.rPosOrderModel.Tax)
+                            </div>
+                            <div class="col-md-8">
+                                @Html.NopDisplayFor(model => model.rPosOrderModel.Tax)
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-md-4">
+                                @Html.NopLabelFor(model => model.rPosOrderModel.OrderTotal)
+                            </div>
+                            <div class="col-md-8">
+                                <strong>@Html.NopDisplayFor(model => model.rPosOrderModel.OrderTotal)</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="panel panel-default">
+                    <div class="panel-body">
+                        <div class="page checkout-page payment-info-page">
+                            <div class="page-title">
+                                <h2>@T("Checkout.PaymentInfo")</h2>
+                            </div>
+                            <div class="page-body checkout-data">
+                                @Html.Widget("checkout_payment_info_top")
+                                <div class="section payment-info">
+                                    @using (Html.BeginForm("EnterPaymentInfo", "PointofSaleOrder", FormMethod.Post))
+                                    {
+                                        var validationSummary = Html.ValidationSummary(false);
+                                        if (!MvcHtmlString.IsNullOrEmpty(validationSummary))
+                                        {
+                                            <div class="message-error">@validationSummary</div>
+                                        }
+                                        <div class="info">
+                                            @Html.Action(Model.PaymentInfoActionName, Model.PaymentInfoControllerName, Model.PaymentInfoRouteValues)
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="col-md-4" style="width: 218.733px">
+                                                <label style="padding-top: 8px;">Customer Email Address:</label>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input id="Text1" type="text" style="width: 250px;" />
+                                            </div>
+                                        </div>
+                                        @Html.HiddenFor(model => model.rPosOrderModel.Id, "Value");
+                                        <div class="buttons">
+                                            <input type="submit" name="processpayment" value="Process rPOS Order" class="button-1 payment-info-next-step-button" />
+                                        </div>
+                                    }
+                                </div>
+                                @Html.Widget("checkout_payment_info_bottom")
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+
+

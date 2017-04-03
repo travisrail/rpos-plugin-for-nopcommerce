@@ -15,6 +15,7 @@ using Nop.Services.Directory;
 using Nop.Web.Framework.Controllers;
 
 using Nop.Plugin.Misc.RailPointofSale.Model;
+using Nop.Services.Payments;
 
 namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 {
@@ -34,6 +35,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         private readonly ILocalizationService _localizationService;
         private readonly IStateProvinceService _stateProvinceService;
         private readonly ICountryService _countryService;
+        private readonly IPaymentService _paymentService;
 
         #endregion 
 
@@ -47,7 +49,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             IProductAttributeParser productAttributeParser,
             ILocalizationService localizationService,
             IStateProvinceService stateProvinceService,
-            ICountryService countryService)
+            ICountryService countryService,
+            IPaymentService paymentService)
         {
             this._workContext = workContext;
             this._storeContext = storeContext;
@@ -60,6 +63,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             this._localizationService = localizationService;
             this._stateProvinceService = stateProvinceService;
             this._countryService = countryService;
+            this._paymentService = paymentService;
         }
 
         [AdminAuthorize]
@@ -76,6 +80,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             model.StoreStateProvinceId = railPOSSettings.StoreStateProvinceId;
             model.StorePostalCode = railPOSSettings.StorePostalCode;
             model.StoreCountryId = railPOSSettings.StoreCountryId;
+            model.StorePaymentMethodSystemName = railPOSSettings.StorePaymentMethodSystemName;
             model.ActiveStoreScopeConfiguration = storeScope;
 
             //stores
@@ -92,6 +97,11 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             model.AvailableCountries.Add(new SelectListItem { Text = "-- Select POS Store Country --", Value = "-1" });
             foreach (var cp in _countryService.GetAllCountries())
                 model.AvailableCountries.Add(new SelectListItem { Text = cp.Name, Value = cp.Id.ToString() });
+
+            //paymetn methods
+            model.AvailablePaymentMethods.Add(new SelectListItem { Text = "-- Select POS Payment Method --", Value = "" });
+            foreach (var pm in _paymentService.LoadActivePaymentMethods())
+                model.AvailablePaymentMethods.Add(new SelectListItem { Text = pm.PluginDescriptor.FriendlyName, Value = pm.PluginDescriptor.SystemName });
 
             return View("~/Plugins/Misc.RailPointofSale/Views/Configuration/Configure.cshtml", model);
         }
@@ -111,6 +121,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             railPOSSettings.StoreStateProvinceId = model.StoreStateProvinceId;
             railPOSSettings.StorePostalCode = model.StorePostalCode;
             railPOSSettings.StoreCountryId = model.StoreCountryId;
+            railPOSSettings.StorePaymentMethodSystemName = model.StorePaymentMethodSystemName;
 
             /* We do not clear cache after each setting update.
              * This behavior can increase performance because cached settings will not be cleared 
@@ -121,6 +132,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StoreStateProvinceId, model.StoreStateProvinceId_OverrideForStore, storeScope, false);
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StorePostalCode, model.StorePostalCode_OverrideForStore, storeScope, false);
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StoreCountryId, model.StoreCountryId_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StorePaymentMethodSystemName, model.StorePaymentMethodSystemName_OverrideForStore, storeScope, false);
 
             //now clear settings cache
             _settingService.ClearCache();
