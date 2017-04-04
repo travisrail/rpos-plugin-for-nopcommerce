@@ -1,6 +1,9 @@
 ﻿
 @{
     Layout = "~/Administration/Views/Shared/_AdminLayout.cshtml";
+
+    //active menu item (system name)
+    Html.SetActiveMenuItemSystemName("Misc.RailPointofSale");
 }
 
 @model Nop.Plugin.Misc.RailPointofSale.Models.RailPointofSaleOrderModel
@@ -9,15 +12,20 @@
 @using Nop.Services
 @using Nop.Web.Framework
 
+@using (Html.BeginForm(null, null, FormMethod.Post, new { id = "order-form" }))
+{
+
 @Html.AntiForgeryToken()
 <div class="content-header clearfix">
     <h1 class="pull-left">New rPOS Order - #@Model.Id.ToString()</h1>
     <div class="pull-right">
+        @if (Model.OrderStatusId != 30 && Model.OrderStatusId != 40)
+        {
         <button type="submit" name="process-order" class="btn bg-green" onclick="location.href='@Url.Action("ProcessPointofSaleOrder", "PointofSaleOrder", new { id = Model.Id })'">
             <i class="fa fa-usd"></i>
             Process Order
         </button>
-        <button type="submit" name="suspend-order" class="btn bg-yellow">
+        <button type="submit" name="suspend-order" class="btn bg-yellow" onclick="location.href='@Url.Action("List", "PointofSaleOrder")'">
             <i class="fa fa-pause"></i>
             Suspend Order
         </button>
@@ -25,145 +33,177 @@
             <i class="fa fa-trash-o"></i>
             @T("Admin.Common.Delete")
         </span>
+        }
+        else
+        {
+            <button type="submit" name="suspend-order" class="btn bg-blue" onclick="location.href='@Url.Action("List", "PointofSaleOrder")'">
+                <i class="fa fa-arrow-left"></i>
+                Back to rPOS Order List
+            </button>
+        }
     </div>
 </div>
 
-<div class="content">
-    <div class="form-horizontal">
-        <div id="order-edit" class="nav-tabs-custom">
-            <ul class="nav nav-tabs">
-                <li class="active"><a data-toggle="tab" href="#tab1">Order Header</a></li>
-                <li><a data-toggle="tab" href="#tab2">Products
-                    @if (Model.Items.Count() > 0)
-                    {
-                        <span class="badge">@Model.Items.Count().ToString()</span>
-                    }
-                    </a></li>
-            </ul>
-            <div class="tab-content">
-                <div id="tab1" class="tab-pane fade in active">
+@Html.ValidationSummary(false)
 
-                    <div class="panel-group">
-                        <div class="panel panel-default">
-                            <div class="panel-body">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <div class="col-md-3">
-                                            @Html.NopLabelFor(model => model.OrderStatus)
+<script>
+    $(document).ready(function () {
+        bindBootstrapTabSelectEvent('order-edit');
+    });
+</script>
+
+    <div class="content">
+        @if (Model.Warnings.Count > 0)
+        {
+            <div class="callout callout-danger">
+                <ul>
+                    @foreach (var warning in Model.Warnings)
+                    {
+                        <li>@warning</li>
+                    }
+                </ul>
+            </div>
+        }
+        <div class="form-horizontal">
+            <div id="order-edit" class="nav-tabs-custom">
+                <ul class="nav nav-tabs">
+                    <li class="active"><a data-toggle="tab" href="#tab1">Order Header</a></li>
+                    <li>
+                        <a data-toggle="tab" href="#tab2">
+                            Products
+                            @if (Model.Items.Count() > 0)
+                            {
+                                <span class="badge">@Model.Items.Count().ToString()</span>
+                            }
+                        </a>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div id="tab1" class="tab-pane fade in active">
+
+                        <div class="panel-group">
+                            <div class="panel panel-default">
+                                <div class="panel-body">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <div class="col-md-3">
+                                                @Html.NopLabelFor(model => model.OrderStatus)
+                                            </div>
+                                            <div class="col-md-9">
+                                                <strong>@Html.NopDisplayFor(model => model.OrderStatus)</strong>
+                                            </div>
                                         </div>
-                                        <div class="col-md-9">
-                                            <strong>@Html.NopDisplayFor(model => model.OrderStatus)</strong>
+                                        <div class="form-group">
+                                            <div class="col-md-3">
+                                                @Html.NopLabelFor(model => model.Id)
+                                            </div>
+                                            <div class="col-md-9">
+                                                @Html.NopDisplayFor(model => model.Id)
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="col-md-3">
+                                                @Html.NopLabelFor(model => model.OrderGuid)
+                                            </div>
+                                            <div class="col-md-9">
+                                                @Html.NopDisplayFor(model => model.OrderGuid)
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="col-md-3">
+                                                @Html.NopLabelFor(model => model.StoreName)
+                                            </div>
+                                            <div class="col-md-9">
+                                                @Html.NopDisplayFor(model => model.StoreName)
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="form-group">
-                                        <div class="col-md-3">
-                                            @Html.NopLabelFor(model => model.Id)
-                                        </div>
-                                        <div class="col-md-9">
-                                            @Html.NopDisplayFor(model => model.Id)
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <div class="col-md-3">
-                                            @Html.NopLabelFor(model => model.OrderGuid)
-                                        </div>
-                                        <div class="col-md-9">
-                                            @Html.NopDisplayFor(model => model.OrderGuid)
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <div class="col-md-3">
-                                            @Html.NopLabelFor(model => model.StoreName)
-                                        </div>
-                                        <div class="col-md-9">
-                                            @Html.NopDisplayFor(model => model.StoreName)
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <div class="col-md-4">
-                                            <div class="label-wrapper">
-                                                <label class="control-label">@T("Admin.Orders.Fields.OrderSubtotal")</label>
-                                                <div class="ico-help" title="@T("Admin.Orders.Fields.OrderSubtotal.Hint")">
-                                                    <i class="fa fa-question-circle"></i>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <div class="col-md-4">
+                                                <div class="label-wrapper">
+                                                    <label class="control-label">@T("Admin.Orders.Fields.OrderSubtotal")</label>
+                                                    <div class="ico-help" title="@T("Admin.Orders.Fields.OrderSubtotal.Hint")">
+                                                        <i class="fa fa-question-circle"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-8">
+                                                <div class="form-text-row">
+                                                    @Html.DisplayFor(model => model.OrderSubtotalInclTax)
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-8">
-                                            <div class="form-text-row">
-                                                @Html.DisplayFor(model => model.OrderSubtotalInclTax)
+                                        <div class="form-group">
+                                            <div class="col-md-4">
+                                                @Html.NopLabelFor(model => model.Tax)
+                                            </div>
+                                            <div class="col-md-8">
+                                                @Html.NopDisplayFor(model => model.Tax)
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <div class="col-md-4">
-                                            @Html.NopLabelFor(model => model.Tax)
+                                        <div class="form-group">
+                                            <div class="col-md-4">
+                                                @Html.NopLabelFor(model => model.OrderTotal)
+                                            </div>
+                                            <div class="col-md-8">
+                                                <strong>@Html.NopDisplayFor(model => model.OrderTotal)</strong>
+                                            </div>
                                         </div>
-                                        <div class="col-md-8">
-                                            @Html.NopDisplayFor(model => model.Tax)
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <div class="col-md-4">
-                                            @Html.NopLabelFor(model => model.OrderTotal)
-                                        </div>
-                                        <div class="col-md-8">
-                                            <strong>@Html.NopDisplayFor(model => model.OrderTotal)</strong>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <div class="col-md-4">
-                                            @Html.NopLabelFor(model => model.PaymentMethod)
-                                        </div>
-                                        <div class="col-md-8">
-                                            @Html.NopDisplayFor(model => model.PaymentMethod)
+                                        <div class="form-group">
+                                            <div class="col-md-4">
+                                                @Html.NopLabelFor(model => model.PaymentMethod)
+                                            </div>
+                                            <div class="col-md-8">
+                                                @Html.NopDisplayFor(model => model.PaymentMethod)
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    @*Store Product List*@
-                    <h3>Add Products</h3>
-                    <table id="products-grid">
-                        <colgroup>
-                            <col style="width:100px" />
-                            <col style="width:100px" />
-                            <col style="width:100px" />
-                            <col style="width:200px" />
-                            <col style="width:100px" />
-                            <col />
-                            <col style="width:100px" />
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th>Select</th>
-                                <th>ID</th>
-                                <th>Photo</th>
-                                <th>Vendor</th>
-                                <th>SKU</th>
-                                <th>Name</th>
-                                <th>Price</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var product in Model.AvailableProducts)
+                        @*Store Product List*@
+                        @if (Model.OrderStatusId != 30 && Model.OrderStatusId != 40)
+                        {
+                            <h3>Add Products</h3>
+                            <table id="products-grid">
+                                <colgroup>
+                                    <col style="width:100px" />
+                                    <col style="width:100px" />
+                                    <col style="width:100px" />
+                                    <col style="width:200px" />
+                                    <col style="width:100px" />
+                                    <col />
+                                    <col style="width:100px" />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Select</th>
+                                        <th>ID</th>
+                                        <th>Photo</th>
+                                        <th>Vendor</th>
+                                        <th>SKU</th>
+                                        <th>Name</th>
+                                        <th>Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in Model.AvailableProducts)
                                     {
-                                <tr>
-                                    <td><button type="button" onclick="addProductToOrder(@product.Id.ToString())" class="btn btn-default">@T("Admin.Common.Select")</button></td>
-                                    <td>@product.Id</td>
-                                    <td><img src="@product.ProductThumbnail" /></td>
-                                    <td>@product.Vendor</td>
-                                    <td>@product.Sku</td>
-                                    <td>@product.Name</td>
-                                    <td>@product.Price.ToString("$#.00")</td>
-                                </tr>
+                            <tr>
+                                <td><button type="button" onclick="addProductToOrder(@product.Id.ToString())" class="btn btn-default">@T("Admin.Common.Select")</button></td>
+                                <td>@product.Id</td>
+                                <td><img src="@product.ProductThumbnail" /></td>
+                                <td>@product.Vendor</td>
+                                <td>@product.Sku</td>
+                                <td>@product.Name</td>
+                                <td>@product.Price.ToString("$#.00")</td>
+                            </tr>
                                     }
-                        </tbody>
-                    </table>
-                    <script>
+                                </tbody>
+                            </table>
+                            <script>
                         $(document).ready(function () {
                             $("#products-grid").kendoGrid({
                                 height: 550,
@@ -173,19 +213,23 @@
 
                         function addProductToOrder(productId) {
                             //load "product details page" block
-                            var productDetailsActionUrl = '@Html.Raw(Url.Action("AddProductToPOSOrderDetails", "PointofSaleOrder", new {orderId = Model.Id, productId = "productidplaceholder"}))';
+                            var productDetailsActionUrl = '@Html.Raw(Url.Action("AddProductToPOSOrderDetails", "PointofSaleOrder", new { orderId = Model.Id, productId = "productidplaceholder" }))';
                             productDetailsActionUrl = productDetailsActionUrl.replace("productidplaceholder", productId);
                             setLocation(productDetailsActionUrl);
                         }
-                    </script>
-                </div>
-                <div id="tab2" class="tab-pane fade">
-                    <h3>Order Products</h3>
-                    @Html.Partial("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/_OrderDetails.Products.cshtml", Model)
+                            </script>
+                        }
+                    </div>
+                    <div id="tab2" class="tab-pane fade">
+                        <h3>Order Products</h3>
+                        @Html.Partial("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/_OrderDetails.Products.cshtml", Model)
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
+@*save selected tab name*@
+<input type="hidden" id="selected-tab-name" name="selected-tab-name" value="@(Html.GetSelectedTabName())">
+}
 

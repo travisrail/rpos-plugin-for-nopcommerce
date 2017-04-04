@@ -9,6 +9,7 @@ using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Orders;
 using Nop.Web.Framework.Menu;
+using Nop.Services.Security;
 
 namespace Nop.Plugin.Misc.RailPointofSale
 {
@@ -16,11 +17,13 @@ namespace Nop.Plugin.Misc.RailPointofSale
     {
         private readonly RailPointofSaleSettings _railPosSettings;
         private readonly ISettingService _settingService;
+        private readonly IPermissionService _permissionService;
 
-        public RailPointofSalePlugin(ISettingService settingService, RailPointofSaleSettings railPosSettings)
+        public RailPointofSalePlugin(ISettingService settingService, RailPointofSaleSettings railPosSettings, IPermissionService permissionService)
         {
             this._settingService = settingService;
             this._railPosSettings = railPosSettings;
+            this._permissionService = permissionService;
         }
 
         public void GetConfigurationRoute(out string actionName, out string controllerName, out RouteValueDictionary routeValues)
@@ -32,21 +35,25 @@ namespace Nop.Plugin.Misc.RailPointofSale
 
         public void ManageSiteMap(Nop.Web.Framework.Menu.SiteMapNode rootNode)
         {
-            var menuItem = new Nop.Web.Framework.Menu.SiteMapNode()
+            if (_permissionService.Authorize(StandardPermissionProvider.ManageCustomers) && _permissionService.Authorize(StandardPermissionProvider.ManageVendors) && _permissionService.Authorize(StandardPermissionProvider.ManageOrders))
             {
-                SystemName = "Misc.RailPointofSale",
-                Title = "rPOS",
-                ControllerName = "PointofSaleOrder",
-                ActionName = "List",
-                Visible = true,
-                RouteValues = new RouteValueDictionary() { { "area", null } },
-            };
+                var menuItem = new Nop.Web.Framework.Menu.SiteMapNode()
+                {
+                    SystemName = "Misc.RailPointofSale",
+                    Title = "Point-of-Sale",
+                    ControllerName = "PointofSaleOrder",
+                    ActionName = "List",
+                    Visible = true,
+                    IconClass = "fa-dot-circle-o",
+                    RouteValues = new RouteValueDictionary() { { "area", null } },
+                };
 
-            var pluginNode = rootNode.ChildNodes.FirstOrDefault(x => x.SystemName == "Sales");
-            if (pluginNode != null)
-                pluginNode.ChildNodes.Add(menuItem);
-            else
-                rootNode.ChildNodes.Add(menuItem);
+                var pluginNode = rootNode.ChildNodes.FirstOrDefault(x => x.SystemName == "Sales");
+                if (pluginNode != null)
+                    pluginNode.ChildNodes.Insert(2, menuItem);
+                else
+                    rootNode.ChildNodes.Add(menuItem);
+            }
         }
 
         public override void Install()

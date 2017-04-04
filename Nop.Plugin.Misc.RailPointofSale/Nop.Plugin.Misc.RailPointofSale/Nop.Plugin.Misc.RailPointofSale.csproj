@@ -131,6 +131,7 @@
     <Compile Include="Controllers\PointofSaleOrderController.cs" />
     <Compile Include="Models\ConfigurationModel.cs" />
     <Compile Include="Models\PointofSalePaymentInfoModel.cs" />
+    <Compile Include="Models\RailPointofSaleOrderListModel.cs" />
     <Compile Include="Models\RailPointofSaleOrderModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RailPointofSalePlugin.cs" />

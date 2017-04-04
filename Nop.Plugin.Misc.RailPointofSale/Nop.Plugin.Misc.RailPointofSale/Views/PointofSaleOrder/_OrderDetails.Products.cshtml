@@ -53,7 +53,10 @@
                         <col />
                         @if (!Model.IsLoggedInAsVendor)
                         {
+                            if (Model.OrderStatusId != 30 && Model.OrderStatusId != 40)
+                            {
                             <col />
+                            }
                         }
                     <thead>
                     <tr>
@@ -83,9 +86,12 @@
                         </th>
                         @if (!Model.IsLoggedInAsVendor)
                         {
+                            if (Model.OrderStatusId != 30 && Model.OrderStatusId != 40)
+                            {
                             <th>
                                 @T("Admin.Common.Edit")
                             </th>
+                            }
                         }
                     </tr>
                     </thead>
@@ -97,7 +103,7 @@
                                     <img src="@item.PictureThumbnailUrl" alt="" title=""/>
                                 </td>
                                 <td style="text-align: left; width: 15%;">
-                                    <em><a href="@Url.Action("Edit", "PointofSaleOrder", new {id = item.ProductId})">@item.ProductName</a></em>
+                                    <em><a href="@Url.Action("Edit", "Product", new {id = item.ProductId})">@item.ProductName</a></em>
                                     @if (!String.IsNullOrEmpty(item.AttributeInfo))
                                     {
                                         <p>
@@ -341,6 +347,8 @@
                                 </td>
                                 @if (!Model.IsLoggedInAsVendor)
                                 {
+                                    if (Model.OrderStatusId != 30 && Model.OrderStatusId != 40)
+                                    {
                                     <td style="width: 10%;">
                                         <button type="submit" name="btnEditOrderItem@(item.Id)" onclick="toggleOrderItemEdit@(item.Id)(true);return false;" id="btnEditOrderItem@(item.Id)" class="btn btn-sm btn-primary">
                                             @T("Admin.Common.Edit")
@@ -360,6 +368,7 @@
                                             @T("Admin.Common.Cancel")
                                         </button>
                                     </td>
+                                    }
                                 }
                                 </tr>
                             }
@@ -372,16 +381,6 @@
                 <div class="form-group">
                     <div class="col-md-12">
                         @Html.Raw(Model.CheckoutAttributeInfo)
-                    </div>
-                </div>
-            }
-            @if (!Model.IsLoggedInAsVendor)
-            {
-                <div class="form-group">
-                    <div class="col-md-12">
-                        <button type="submit" id="btnAddNewProduct" name="btnAddNewProduct" onclick="javascript:setLocation('@(Url.Action("AddProductToOrder", "Order", new {orderId = Model.Id}))'); return false;" class="btn btn-primary">
-                            @T("Admin.Orders.Products.AddNew")
-                        </button>
                     </div>
                 </div>
             }

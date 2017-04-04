@@ -49,7 +49,7 @@ using Nop.Services.Customers;
 
 namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 {
-    public class PointofSaleOrderController : Controller
+    public class PointofSaleOrderController : Nop.Admin.Controllers.BaseAdminController
     {
         #region fields
         private readonly IOrderService _orderService;
@@ -229,23 +229,10 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             return List();
         }
 
-        [HttpGet]
-        public ActionResult List()
-        {
-            //check to make sure the store is configured
-            if (_rposSettings.StoreId <= 0)
-            {
-                //the store is not configured so we need to re-direct to configuration
-                return Redirect("/Admin/Plugin/ConfigureMiscPlugin?systemName=Misc.RailPointofSale");
-            }
-            else
-            {
-                return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/List.cshtml", null);
-            }
-        }
-
         public ActionResult Add()
         {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
 
             //get customer
             Customer posCustomer = GetCustomer();
@@ -278,10 +265,217 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             return RedirectToAction("Edit", new { id = newOrder.Id });
         }
 
+        #region Order List
+
+        [HttpGet]
+        public ActionResult List(
+            [ModelBinder(typeof(CommaSeparatedModelBinder))] List<string> orderStatusIds = null,
+            [ModelBinder(typeof(CommaSeparatedModelBinder))] List<string> paymentStatusIds = null)
+        {
+            if (!_permissionService.Authorize(StandardPermissionProvider.ManageOrders))
+                return AccessDeniedView();
+
+            //check to make sure the store is configured
+            if (_rposSettings.StoreId <= 0)
+            {
+                //the store is not configured so we need to re-direct to configuration
+                return Redirect("/Admin/Plugin/ConfigureMiscPlugin?systemName=Misc.RailPointofSale");
+            }
+            else
+            {
+                //order statuses
+                RailPointofSaleOrderListModel model = new RailPointofSaleOrderListModel();
+                model.AvailableOrderStatuses = OrderStatus.Pending.ToSelectList(false).ToList();
+                model.AvailableOrderStatuses.Insert(0, new SelectListItem
+                { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0", Selected = true });
+                if (orderStatusIds != null && orderStatusIds.Any())
+                {
+                    foreach (var item in model.AvailableOrderStatuses.Where(os => orderStatusIds.Contains(os.Value)))
+                        item.Selected = true;
+                    model.AvailableOrderStatuses.First().Selected = false;
+                }
+
+                //payment statuses
+                model.AvailablePaymentStatuses = PaymentStatus.Pending.ToSelectList(false).ToList();
+                model.AvailablePaymentStatuses.Insert(0, new SelectListItem
+                { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0", Selected = true });
+                if (paymentStatusIds != null && paymentStatusIds.Any())
+                {
+                    foreach (var item in model.AvailablePaymentStatuses.Where(ps => paymentStatusIds.Contains(ps.Value)))
+                        item.Selected = true;
+                    model.AvailablePaymentStatuses.First().Selected = false;
+                }
+
+                //vendors
+                model.AvailableVendors.Add(new SelectListItem { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0" });
+                foreach (var v in _vendorService.GetAllVendors(showHidden: true))
+                    model.AvailableVendors.Add(new SelectListItem { Text = v.Name, Value = v.Id.ToString() });
+
+                //a vendor should have access only to orders with his products
+                model.IsLoggedInAsVendor = _workContext.CurrentVendor != null;
+
+                return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/List.cshtml", model);
+            }
+        }
+
+
+        [HttpPost]
+        public ActionResult OrderList(DataSourceRequest command, RailPointofSaleOrderListModel model)
+        {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
+            //a vendor should have access only to his products
+            if (_workContext.CurrentVendor != null)
+            {
+                model.VendorId = _workContext.CurrentVendor.Id;
+            }
+
+            //defaults?
+            DateTime? startDateValue = (model.StartDate == null) ? (DateTime?)_dateTimeHelper.ConvertToUtcTime(DateTime.Now.Date, _dateTimeHelper.CurrentTimeZone)
+                : (DateTime?)_dateTimeHelper.ConvertToUtcTime(model.StartDate.Value, _dateTimeHelper.CurrentTimeZone);
+
+            DateTime? endDateValue = (model.EndDate == null) ? (DateTime?)_dateTimeHelper.ConvertToUtcTime(DateTime.Now.Date.AddDays(1), _dateTimeHelper.CurrentTimeZone)
+                            : (DateTime?)_dateTimeHelper.ConvertToUtcTime(model.EndDate.Value, _dateTimeHelper.CurrentTimeZone).AddDays(1);
+
+            var orderStatusIds = !model.OrderStatusIds.Contains(0) ? model.OrderStatusIds : null;
+            var paymentStatusIds = !model.PaymentStatusIds.Contains(0) ? model.PaymentStatusIds : null;
+            var shippingStatusIds = !model.ShippingStatusIds.Contains(0) ? model.ShippingStatusIds : null;
+
+            var filterByProductId = 0;
+            var product = _productService.GetProductById(model.ProductId);
+            if (product != null && HasAccessToProduct(product))
+                filterByProductId = model.ProductId;
+
+            //load orders
+            var orders = _orderService.SearchOrders(storeId: model.StoreId,
+                vendorId: model.VendorId,
+                productId: filterByProductId,
+                warehouseId: model.WarehouseId,
+                paymentMethodSystemName: model.PaymentMethodSystemName,
+                createdFromUtc: startDateValue,
+                createdToUtc: endDateValue,
+                osIds: orderStatusIds,
+                psIds: paymentStatusIds,
+                ssIds: shippingStatusIds,
+                billingEmail: model.BillingEmail,
+                billingLastName: model.BillingLastName,
+                billingCountryId: model.BillingCountryId,
+                orderNotes: model.OrderNotes,
+                pageIndex: command.Page - 1,
+                pageSize: command.PageSize);
+
+            var gridModel = new DataSourceResult
+            {
+                Data = orders.Select(x =>
+                {
+                    var store = _storeService.GetStoreById(_rposSettings.StoreId);
+                    return new OrderModel
+                    {
+                        Id = x.Id,
+                        StoreName = store != null ? store.Name : "Unknown",
+                        OrderTotal = _priceFormatter.FormatPrice(x.OrderTotal, true, false),
+                        OrderStatus = x.OrderStatus.GetLocalizedEnum(_localizationService, _workContext),
+                        OrderStatusId = x.OrderStatusId,
+                        PaymentStatus = x.PaymentStatus.GetLocalizedEnum(_localizationService, _workContext),
+                        PaymentStatusId = x.PaymentStatusId,
+                        ShippingStatus = x.ShippingStatus.GetLocalizedEnum(_localizationService, _workContext),
+                        ShippingStatusId = x.ShippingStatusId,
+                        CustomerEmail = x.BillingAddress.Email,
+                        CustomerFullName = string.Format("{0} {1}", x.BillingAddress.FirstName, x.BillingAddress.LastName),
+                        CreatedOn = _dateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc)
+                    };
+                }),
+                Total = orders.TotalCount
+            };
+
+            //summary report
+            //currently we do not support productId and warehouseId parameters for this report
+            var reportSummary = _orderReportService.GetOrderAverageReportLine(
+                storeId: model.StoreId,
+                vendorId: model.VendorId,
+                orderId: 0,
+                paymentMethodSystemName: model.PaymentMethodSystemName,
+                osIds: orderStatusIds,
+                psIds: paymentStatusIds,
+                ssIds: shippingStatusIds,
+                startTimeUtc: startDateValue,
+                endTimeUtc: endDateValue,
+                billingEmail: model.BillingEmail,
+                billingLastName: model.BillingLastName,
+                billingCountryId: model.BillingCountryId,
+                orderNotes: model.OrderNotes);
+
+            var profit = _orderReportService.ProfitReport(
+                storeId: model.StoreId,
+                vendorId: model.VendorId,
+                paymentMethodSystemName: model.PaymentMethodSystemName,
+                osIds: orderStatusIds,
+                psIds: paymentStatusIds,
+                ssIds: shippingStatusIds,
+                startTimeUtc: startDateValue,
+                endTimeUtc: endDateValue,
+                billingEmail: model.BillingEmail,
+                billingLastName: model.BillingLastName,
+                billingCountryId: model.BillingCountryId,
+                orderNotes: model.OrderNotes);
+            var primaryStoreCurrency = _currencyService.GetCurrencyById(_currencySettings.PrimaryStoreCurrencyId);
+            if (primaryStoreCurrency == null)
+                throw new Exception("Cannot load primary store currency");
+
+            gridModel.ExtraData = new OrderAggreratorModel
+            {
+                aggregatorprofit = _priceFormatter.FormatPrice(profit, true, false),
+                aggregatorshipping = _priceFormatter.FormatShippingPrice(reportSummary.SumShippingExclTax, true, primaryStoreCurrency, _workContext.WorkingLanguage, false),
+                aggregatortax = _priceFormatter.FormatPrice(reportSummary.SumTax, true, false),
+                aggregatortotal = _priceFormatter.FormatPrice(reportSummary.SumOrders, true, false)
+            };
+            return new JsonResult
+            {
+                Data = gridModel
+            };
+        }
+
+        public ActionResult ProductSearchAutoComplete(string term)
+        {
+            const int searchTermMinimumLength = 3;
+            if (String.IsNullOrWhiteSpace(term) || term.Length < searchTermMinimumLength)
+                return Content("");
+
+            //a vendor should have access only to his products
+            var vendorId = 0;
+            if (_workContext.CurrentVendor != null)
+            {
+                vendorId = _workContext.CurrentVendor.Id;
+            }
+
+            //products
+            const int productNumber = 15;
+            var products = _productService.SearchProducts(
+                vendorId: vendorId,
+                keywords: term,
+                pageSize: productNumber,
+                showHidden: true);
+
+            var result = (from p in products
+                          select new
+                          {
+                              label = p.Name,
+                              productid = p.Id
+                          })
+                          .ToList();
+            return Json(result, JsonRequestBehavior.AllowGet);
+        }
+
+        #endregion
+
         #region Edit
 
         public ActionResult Edit(int id)
         {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
             //get order
             var order = _orderService.GetOrderById(id);
             if (order == null || order.Deleted)
@@ -292,56 +486,13 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             RailPointofSaleOrderModel model = new RailPointofSaleOrderModel();
             PrepareOrderDetailsModel(model, order);
 
-            //get a list of products for this store
-            var products = _productService.SearchProducts(
-                    storeId: _rposSettings.StoreId,
-                    visibleIndividuallyOnly: true,
-                    orderBy: ProductSortingEnum.NameAsc,
-                    pageSize: 100 );
 
-            //loop each product for sale at the POS store and add
-            foreach (var prod in products)
-            {
-                //get picture
-                string imageUrl = "";
-                var picture = _pictureService.GetPicturesByProductId(prod.Id, 1).FirstOrDefault();
-
-                if (picture != null)
-                {
-                    imageUrl = _pictureService.GetPictureUrl(picture.Id, targetSize: 75);
-                }
-                else
-                {
-                    imageUrl = _pictureService.GetDefaultPictureUrl(targetSize: 75);
-                }
-
-                //get vendor
-                string vendorname = "";
-
-                if (prod.VendorId != 0)
-                {
-                    vendorname = _vendorService.GetVendorById(prod.VendorId).Name;
-                }
-
-                //add item
-                var rposp = new rPOSProduct {
-                    Id = prod.Id,
-                    Sku = prod.Sku,
-                    Vendor = vendorname,
-                    Name = prod.Name,
-                    Price = prod.Price,
-                    ProductThumbnail = imageUrl
-                };
-
-                //add to model
-                model.AvailableProducts.Add(rposp);
-            }
 
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
         }
 
         [NonAction]
-        protected virtual void PrepareOrderDetailsModel(OrderModel model, Order order)
+        protected virtual void PrepareOrderDetailsModel(RailPointofSaleOrderModel model, Order order)
         {
             if (order == null)
                 throw new ArgumentNullException("order");
@@ -713,6 +864,283 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             }
             model.HasDownloadableProducts = hasDownloadableItems;
             #endregion
+
+            #region ProductsForSale
+
+            //get a list of products for this store
+            var sprod = _productService.SearchProducts(
+                    storeId: _rposSettings.StoreId,
+                    visibleIndividuallyOnly: true,
+                    orderBy: ProductSortingEnum.NameAsc,
+                    pageSize: 100);
+
+            //loop each product for sale at the POS store and add
+            foreach (var prod in sprod)
+            {
+                //get picture
+                string imageUrl = "";
+                var picture = _pictureService.GetPicturesByProductId(prod.Id, 1).FirstOrDefault();
+
+                if (picture != null)
+                {
+                    imageUrl = _pictureService.GetPictureUrl(picture.Id, targetSize: 75);
+                }
+                else
+                {
+                    imageUrl = _pictureService.GetDefaultPictureUrl(targetSize: 75);
+                }
+
+                //get vendor
+                string vendorname = "";
+
+                if (prod.VendorId != 0)
+                {
+                    vendorname = _vendorService.GetVendorById(prod.VendorId).Name;
+                }
+
+                //add item
+                var rposp = new rPOSProduct
+                {
+                    Id = prod.Id,
+                    Sku = prod.Sku,
+                    Vendor = vendorname,
+                    Name = prod.Name,
+                    Price = prod.Price,
+                    ProductThumbnail = imageUrl
+                };
+
+                //add to model
+                model.AvailableProducts.Add(rposp);
+            }
+
+            #endregion
+        }
+
+        [HttpPost]
+        public ActionResult Delete(int id)
+        {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
+            //get order
+            var order = _orderService.GetOrderById(id);
+            if (order == null || order.Deleted)
+                //No order found with the specified id
+                return RedirectToAction("List");
+
+            //delete order
+            _orderService.DeleteOrder(order);
+            
+            return RedirectToAction("List");
+        }
+
+        [HttpPost, ActionName("Edit")]
+        [FormValueRequired(FormValueRequirement.StartsWith, "btnSaveOrderItem")]
+        [ValidateInput(false)]
+        public ActionResult EditOrderItem(int id, FormCollection form)
+        {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
+            var order = _orderService.GetOrderById(id);
+            if (order == null)
+                //No order found with the specified id
+                return RedirectToAction("List", "PointofSaleOrder");
+
+            //a vendor does not have access to this functionality
+            if (_workContext.CurrentVendor != null)
+                return RedirectToAction("Edit", "PointofSaleOrder", new { id = id });
+
+            //get order item identifier
+            int orderItemId = 0;
+            foreach (var formValue in form.AllKeys)
+                if (formValue.StartsWith("btnSaveOrderItem", StringComparison.InvariantCultureIgnoreCase))
+                    orderItemId = Convert.ToInt32(formValue.Substring("btnSaveOrderItem".Length));
+
+            var orderItem = order.OrderItems.FirstOrDefault(x => x.Id == orderItemId);
+            if (orderItem == null)
+                throw new ArgumentException("No order item found with the specified id");
+
+
+            decimal unitPriceInclTax, unitPriceExclTax, discountInclTax, discountExclTax, priceInclTax, priceExclTax;
+            int quantity;
+            if (!decimal.TryParse(form["pvUnitPriceInclTax" + orderItemId], out unitPriceInclTax))
+                unitPriceInclTax = orderItem.UnitPriceInclTax;
+            if (!decimal.TryParse(form["pvUnitPriceExclTax" + orderItemId], out unitPriceExclTax))
+                unitPriceExclTax = orderItem.UnitPriceExclTax;
+            if (!int.TryParse(form["pvQuantity" + orderItemId], out quantity))
+                quantity = orderItem.Quantity;
+            if (!decimal.TryParse(form["pvDiscountInclTax" + orderItemId], out discountInclTax))
+                discountInclTax = orderItem.DiscountAmountInclTax;
+            if (!decimal.TryParse(form["pvDiscountExclTax" + orderItemId], out discountExclTax))
+                discountExclTax = orderItem.DiscountAmountExclTax;
+            if (!decimal.TryParse(form["pvPriceInclTax" + orderItemId], out priceInclTax))
+                priceInclTax = orderItem.PriceInclTax;
+            if (!decimal.TryParse(form["pvPriceExclTax" + orderItemId], out priceExclTax))
+                priceExclTax = orderItem.PriceExclTax;
+
+            if (quantity > 0)
+            {
+                int qtyDifference = orderItem.Quantity - quantity;
+
+                if (!_orderSettings.AutoUpdateOrderTotalsOnEditingOrder)
+                {
+                    orderItem.UnitPriceInclTax = unitPriceInclTax;
+                    orderItem.UnitPriceExclTax = unitPriceExclTax;
+                    orderItem.Quantity = quantity;
+                    orderItem.DiscountAmountInclTax = discountInclTax;
+                    orderItem.DiscountAmountExclTax = discountExclTax;
+                    orderItem.PriceInclTax = priceInclTax;
+                    orderItem.PriceExclTax = priceExclTax;
+                    _orderService.UpdateOrder(order);
+                }
+
+                //adjust inventory
+                _productService.AdjustInventory(orderItem.Product, qtyDifference, orderItem.AttributesXml);
+
+            }
+            else
+            {
+                //adjust inventory
+                _productService.AdjustInventory(orderItem.Product, orderItem.Quantity, orderItem.AttributesXml);
+
+                //delete item
+                _orderService.DeleteOrderItem(orderItem);
+            }
+
+            //update order totals
+            var updateOrderParameters = new UpdateOrderParameters
+            {
+                UpdatedOrder = order,
+                UpdatedOrderItem = orderItem,
+                PriceInclTax = unitPriceInclTax,
+                PriceExclTax = unitPriceExclTax,
+                DiscountAmountInclTax = discountInclTax,
+                DiscountAmountExclTax = discountExclTax,
+                SubTotalInclTax = priceInclTax,
+                SubTotalExclTax = priceExclTax,
+                Quantity = quantity
+            };
+            _orderProcessingService.UpdateOrderTotals(updateOrderParameters);
+
+            //add a note
+            order.OrderNotes.Add(new OrderNote
+            {
+                Note = "Order item has been edited",
+                DisplayToCustomer = false,
+                CreatedOnUtc = DateTime.UtcNow
+            });
+            _orderService.UpdateOrder(order);
+            LogEditOrder(order.Id);
+
+            var model = new RailPointofSaleOrderModel();
+            PrepareOrderDetailsModel(model, order);
+            model.Warnings = updateOrderParameters.Warnings;
+
+            //selected tab
+            SaveSelectedTabName(persistForTheNextRequest: false);
+
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
+        }
+
+        [HttpPost, ActionName("Edit")]
+        [FormValueRequired(FormValueRequirement.StartsWith, "btnDeleteOrderItem")]
+        [ValidateInput(false)]
+        public ActionResult DeleteOrderItem(int id, FormCollection form)
+        {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
+            var order = _orderService.GetOrderById(id);
+            if (order == null)
+                //No order found with the specified id
+                return RedirectToAction("List", "PointofSaleOrder");
+
+            //a vendor does not have access to this functionality
+            if (_workContext.CurrentVendor != null)
+                return RedirectToAction("Edit", "PointofSaleOrder", new { id = id });
+
+            //get order item identifier
+            int orderItemId = 0;
+            foreach (var formValue in form.AllKeys)
+                if (formValue.StartsWith("btnDeleteOrderItem", StringComparison.InvariantCultureIgnoreCase))
+                    orderItemId = Convert.ToInt32(formValue.Substring("btnDeleteOrderItem".Length));
+
+            var orderItem = order.OrderItems.FirstOrDefault(x => x.Id == orderItemId);
+            if (orderItem == null)
+                throw new ArgumentException("No order item found with the specified id");
+
+            if (_giftCardService.GetGiftCardsByPurchasedWithOrderItemId(orderItem.Id).Any())
+            {
+                //we cannot delete an order item with associated gift cards
+                //a store owner should delete them first
+
+                var model = new RailPointofSaleOrderModel();
+                PrepareOrderDetailsModel(model, order);
+
+                ErrorNotification("This order item has an associated gift card record. Please delete it first.", false);
+
+                //selected tab
+                SaveSelectedTabName(persistForTheNextRequest: false);
+
+                return View(model);
+
+            }
+            else
+            {
+                //adjust inventory
+                _productService.AdjustInventory(orderItem.Product, orderItem.Quantity, orderItem.AttributesXml);
+
+                //delete item
+                _orderService.DeleteOrderItem(orderItem);
+
+                //update order totals
+                var updateOrderParameters = new UpdateOrderParameters
+                {
+                    UpdatedOrder = order,
+                    UpdatedOrderItem = orderItem,
+
+                };
+
+                if (order.OrderItems.Count() == 0) //This was our last one
+                {
+                    order.OrderSubtotalExclTax = 0M;
+                    order.OrderSubtotalInclTax = 0M;
+                    order.OrderSubTotalDiscountExclTax = 0M;
+                    order.OrderSubTotalDiscountInclTax = 0M;
+                    order.OrderShippingInclTax = 0M;
+                    order.OrderShippingExclTax = 0M;
+                    order.PaymentMethodAdditionalFeeExclTax = 0M;
+                    order.PaymentMethodAdditionalFeeInclTax = 0M;
+                    order.OrderTax = 0M;
+                    order.OrderDiscount = 0M;
+                    order.OrderTotal = 0M;
+                    order.RefundedAmount = 0M;
+                }
+                else
+                {
+                    _orderProcessingService.UpdateOrderTotals(updateOrderParameters);
+                }
+
+                //add a note
+                order.OrderNotes.Add(new OrderNote
+                {
+                    Note = "Order item has been deleted",
+                    DisplayToCustomer = false,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+                _orderService.UpdateOrder(order);
+                LogEditOrder(order.Id);
+
+                var model = new RailPointofSaleOrderModel();
+                PrepareOrderDetailsModel(model, order);
+                model.Warnings = updateOrderParameters.Warnings;
+
+                //selected tab
+                SaveSelectedTabName(persistForTheNextRequest: false);
+
+                return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
+            }
         }
 
         #endregion
@@ -721,6 +1149,9 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
         public ActionResult AddProductToPOSOrderDetails(int orderId, int productId)
         {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
             var model = PrepareAddProductToPOSOrderModel(orderId, productId);
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductToPointofSaleOrder.cshtml", model);
         }
@@ -728,6 +1159,9 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         [HttpPost]
         public ActionResult AddProductToPOSOrderDetails(int orderId, int productId, FormCollection form)
         {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
             var order = _orderService.GetOrderById(orderId);
             var product = _productService.GetProductById(productId);
             //save order item
@@ -1166,6 +1600,9 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
         public ActionResult ProcessPointofSaleOrder(int id)
         {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
             //create order model
             var order = _orderService.GetOrderById(id);
             RailPointofSaleOrderModel _rPOSOrderModel = new RailPointofSaleOrderModel();
@@ -1184,6 +1621,9 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         [HttpPost]
         public ActionResult EnterPaymentInfo(FormCollection form)
         {
+            if (!HasAccessToPos())
+                return AccessDeniedView();
+
             //create order model
             int orderId = Convert.ToInt32(form["rPosOrderModel.Id"]);
             string customerEmail = form["CustomerEmailAddress"];
@@ -1312,5 +1752,40 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         }
 
         #endregion
+
+        #region Utilities
+
+        private ActionResult AccessDeniedView()
+        {
+            throw new NotImplementedException();
+        }
+
+        [NonAction]
+        protected virtual bool HasAccessToProduct(Product product)
+        {
+            if (product == null)
+                throw new ArgumentNullException("product");
+
+            if (_workContext.CurrentVendor == null)
+                //not a vendor; has access
+                return true;
+
+            var vendorId = _workContext.CurrentVendor.Id;
+            return product.VendorId == vendorId;
+        }
+
+        [NonAction]
+        protected virtual bool HasAccessToPos()
+        {
+            if (_permissionService.Authorize(StandardPermissionProvider.ManageCustomers) && _permissionService.Authorize(StandardPermissionProvider.ManageVendors) && _permissionService.Authorize(StandardPermissionProvider.ManageOrders))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        #endregion
+
     }
 }
