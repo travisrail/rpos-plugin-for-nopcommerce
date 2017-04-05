@@ -248,6 +248,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 BillingAddressId = posCustomer.BillingAddress.Id,
                 ShippingAddressId = posCustomer.ShippingAddress.Id,
                 ShippingStatusId = 10,
+                OrderShippingExclTax = 0,
+                OrderShippingInclTax = 0,
                 PaymentStatusId = 10,
                 PaymentMethodSystemName = _rposSettings.StorePaymentMethodSystemName,
                 OrderStatus = OrderStatus.Pending,
@@ -962,38 +964,24 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 throw new ArgumentException("No order item found with the specified id");
 
 
-            decimal unitPriceInclTax, unitPriceExclTax, discountInclTax, discountExclTax, priceInclTax, priceExclTax;
+            decimal unitPriceExclTax, discountExclTax;
             int quantity;
-            if (!decimal.TryParse(form["pvUnitPriceInclTax" + orderItemId], out unitPriceInclTax))
-                unitPriceInclTax = orderItem.UnitPriceInclTax;
             if (!decimal.TryParse(form["pvUnitPriceExclTax" + orderItemId], out unitPriceExclTax))
                 unitPriceExclTax = orderItem.UnitPriceExclTax;
             if (!int.TryParse(form["pvQuantity" + orderItemId], out quantity))
                 quantity = orderItem.Quantity;
-            if (!decimal.TryParse(form["pvDiscountInclTax" + orderItemId], out discountInclTax))
-                discountInclTax = orderItem.DiscountAmountInclTax;
             if (!decimal.TryParse(form["pvDiscountExclTax" + orderItemId], out discountExclTax))
                 discountExclTax = orderItem.DiscountAmountExclTax;
-            if (!decimal.TryParse(form["pvPriceInclTax" + orderItemId], out priceInclTax))
-                priceInclTax = orderItem.PriceInclTax;
-            if (!decimal.TryParse(form["pvPriceExclTax" + orderItemId], out priceExclTax))
-                priceExclTax = orderItem.PriceExclTax;
 
             if (quantity > 0)
             {
                 int qtyDifference = orderItem.Quantity - quantity;
 
-                if (!_orderSettings.AutoUpdateOrderTotalsOnEditingOrder)
-                {
-                    orderItem.UnitPriceInclTax = unitPriceInclTax;
-                    orderItem.UnitPriceExclTax = unitPriceExclTax;
-                    orderItem.Quantity = quantity;
-                    orderItem.DiscountAmountInclTax = discountInclTax;
-                    orderItem.DiscountAmountExclTax = discountExclTax;
-                    orderItem.PriceInclTax = priceInclTax;
-                    orderItem.PriceExclTax = priceExclTax;
-                    _orderService.UpdateOrder(order);
-                }
+                //adjust item prices
+                orderItem.UnitPriceExclTax = unitPriceExclTax;
+                orderItem.Quantity = quantity;
+                orderItem.DiscountAmountExclTax = discountExclTax;
+                _orderService.UpdateOrder(order);
 
                 //adjust inventory
                 _productService.AdjustInventory(orderItem.Product, qtyDifference, orderItem.AttributesXml);
@@ -1009,19 +997,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             }
 
             //update order totals
-            var updateOrderParameters = new UpdateOrderParameters
-            {
-                UpdatedOrder = order,
-                UpdatedOrderItem = orderItem,
-                PriceInclTax = unitPriceInclTax,
-                PriceExclTax = unitPriceExclTax,
-                DiscountAmountInclTax = discountInclTax,
-                DiscountAmountExclTax = discountExclTax,
-                SubTotalInclTax = priceInclTax,
-                SubTotalExclTax = priceExclTax,
-                Quantity = quantity
-            };
-            _orderProcessingService.UpdateOrderTotals(updateOrderParameters);
+            UpdateOrderTotals(order);
 
             //add a note
             order.OrderNotes.Add(new OrderNote
@@ -1035,10 +1011,11 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
             var model = new RailPointofSaleOrderModel();
             PrepareOrderDetailsModel(model, order);
-            model.Warnings = updateOrderParameters.Warnings;
 
             //selected tab
             SaveSelectedTabName(persistForTheNextRequest: false);
+
+            SuccessNotification("Item " + orderItem.Product.Name + " successfully modified on order!");
 
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
         }
@@ -1070,78 +1047,36 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             if (orderItem == null)
                 throw new ArgumentException("No order item found with the specified id");
 
-            if (_giftCardService.GetGiftCardsByPurchasedWithOrderItemId(orderItem.Id).Any())
+            //adjust inventory
+            _productService.AdjustInventory(orderItem.Product, orderItem.Quantity, orderItem.AttributesXml);
+
+            //delete item
+            _orderService.DeleteOrderItem(orderItem);
+
+            //update order totals
+            UpdateOrderTotals(order);
+
+            //add a note
+            order.OrderNotes.Add(new OrderNote
             {
-                //we cannot delete an order item with associated gift cards
-                //a store owner should delete them first
+                Note = "Order item has been deleted",
+                DisplayToCustomer = false,
+                CreatedOnUtc = DateTime.UtcNow
+            });
+            _orderService.UpdateOrder(order);
+            LogEditOrder(order.Id);
 
-                var model = new RailPointofSaleOrderModel();
-                PrepareOrderDetailsModel(model, order);
+            var model = new RailPointofSaleOrderModel();
+            PrepareOrderDetailsModel(model, order);
 
-                ErrorNotification("This order item has an associated gift card record. Please delete it first.", false);
+            //selected tab
+            SaveSelectedTabName(persistForTheNextRequest: false);
 
-                //selected tab
-                SaveSelectedTabName(persistForTheNextRequest: false);
+            SuccessNotification("Item successfully removed from order!");
 
-                return View(model);
-
-            }
-            else
-            {
-                //adjust inventory
-                _productService.AdjustInventory(orderItem.Product, orderItem.Quantity, orderItem.AttributesXml);
-
-                //delete item
-                _orderService.DeleteOrderItem(orderItem);
-
-                //update order totals
-                var updateOrderParameters = new UpdateOrderParameters
-                {
-                    UpdatedOrder = order,
-                    UpdatedOrderItem = orderItem,
-
-                };
-
-                if (order.OrderItems.Count() == 0) //This was our last one
-                {
-                    order.OrderSubtotalExclTax = 0M;
-                    order.OrderSubtotalInclTax = 0M;
-                    order.OrderSubTotalDiscountExclTax = 0M;
-                    order.OrderSubTotalDiscountInclTax = 0M;
-                    order.OrderShippingInclTax = 0M;
-                    order.OrderShippingExclTax = 0M;
-                    order.PaymentMethodAdditionalFeeExclTax = 0M;
-                    order.PaymentMethodAdditionalFeeInclTax = 0M;
-                    order.OrderTax = 0M;
-                    order.OrderDiscount = 0M;
-                    order.OrderTotal = 0M;
-                    order.RefundedAmount = 0M;
-                }
-                else
-                {
-                    _orderProcessingService.UpdateOrderTotals(updateOrderParameters);
-                }
-
-                //add a note
-                order.OrderNotes.Add(new OrderNote
-                {
-                    Note = "Order item has been deleted",
-                    DisplayToCustomer = false,
-                    CreatedOnUtc = DateTime.UtcNow
-                });
-                _orderService.UpdateOrder(order);
-                LogEditOrder(order.Id);
-
-                var model = new RailPointofSaleOrderModel();
-                PrepareOrderDetailsModel(model, order);
-                model.Warnings = updateOrderParameters.Warnings;
-
-                //selected tab
-                SaveSelectedTabName(persistForTheNextRequest: false);
-
-                return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
-            }
+            return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
         }
+
 
         #endregion
 
@@ -1279,17 +1214,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 _productService.AdjustInventory(orderItem.Product, -orderItem.Quantity, orderItem.AttributesXml);
 
                 //update order totals
-                var updateOrderParameters = new UpdateOrderParameters
-                {
-                    UpdatedOrder = order,
-                    UpdatedOrderItem = orderItem,
-                    PriceInclTax = unitPriceInclTax,
-                    PriceExclTax = unitPriceExclTax,
-                    SubTotalInclTax = priceInclTax,
-                    SubTotalExclTax = priceExclTax,
-                    Quantity = quantity
-                };
-                _orderProcessingService.UpdateOrderTotals(updateOrderParameters);
+                UpdateOrderTotals(order);
 
                 //add a note
                 order.OrderNotes.Add(new OrderNote
@@ -1325,8 +1250,9 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                     }
                 }
 
+                SuccessNotification("Item "+ orderItem.Product.Name +" successfully added to order!");
+
                 //redirect to order details page
-                TempData["nop.admin.order.warnings"] = updateOrderParameters.Warnings;
                 return RedirectToAction("Edit", "PointofSaleOrder", new { id = order.Id });
             }
 
@@ -1538,63 +1464,149 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
         #endregion
 
-        #region Customer
+        #region Update Order Totals
 
-        private Customer GetCustomer()
+        [NonAction]
+        protected virtual void UpdateOrderTotals(Order order)
         {
-            string posCustomerEmail = "rpos_customer@do_not_use.com";
-            string posCustomerUserName = "rPOSCustomer_" + _authenticationService.GetAuthenticatedCustomer().Id.ToString();
+            //Pos order so always clear shipping
+            order.OrderShippingExclTax = 0.00M;
+            order.OrderShippingInclTax = 0.00M;
 
-            Customer posCustomer = _customerService.GetCustomerByUsername(posCustomerUserName);
-
-            if (posCustomer == null)
+            if (order.OrderItems.Count() != 0)
             {
-                //create customer
-                Guid posCustomerGuid = Guid.NewGuid();
-
-                posCustomer = new Customer
+                //Get Tax Rate
+                decimal OrderTaxRate = 0.0000M;
+                decimal OrderTaxMuti = 0.0000M;
+                if (!String.IsNullOrEmpty(order.TaxRates))
                 {
-                    CustomerGuid = posCustomerGuid,
-                    Email = posCustomerEmail,
-                    Username = posCustomerUserName,
-                    VendorId = 0,
-                    AdminComment = "Created for POS store sales, do not modify this customer!",
-                    IsTaxExempt = false,
-                    Active = true,
-                    CreatedOnUtc = DateTime.UtcNow,
-                    LastActivityDateUtc = DateTime.UtcNow,
-                };
-                _customerService.InsertCustomer(posCustomer);
+                    OrderTaxRate = Convert.ToDecimal(order.TaxRates.Split(';')[0].Split(':')[0]) / 100.0000M;
+                    OrderTaxMuti = OrderTaxRate + 1;
+                }
 
-                //get new customer
-                posCustomer = _customerService.GetCustomerByGuid(posCustomerGuid);
+                //Order Subtotal
+                decimal OrderSubTotalExclTax = 0.00M;
+                decimal OrderSubTotalInclTax = 0.00M;
+
+                //Update Order Items Price
+                foreach (var item in order.OrderItems)
+                {
+                    //Calculate Item Unit Price
+                    item.PriceExclTax = (item.UnitPriceExclTax * item.Quantity) - item.DiscountAmountExclTax;
+
+                    //Calculate Tax On Item
+                    item.UnitPriceInclTax = Math.Round(item.UnitPriceExclTax * OrderTaxMuti,2);
+                    item.PriceInclTax = Math.Round(item.PriceExclTax * OrderTaxMuti, 2);
+                    item.DiscountAmountInclTax = Math.Round(item.DiscountAmountExclTax, 2);
+
+                    //Add Order Subtotals
+                    OrderSubTotalExclTax = OrderSubTotalExclTax + item.PriceExclTax;
+                    OrderSubTotalInclTax = OrderSubTotalInclTax + item.PriceInclTax;
+                }
+
+                //Set Order Subtotals
+                order.OrderSubtotalExclTax = OrderSubTotalExclTax;
+                order.OrderSubtotalInclTax = OrderSubTotalInclTax;
+
+                //Order Shipping Tax
+                order.OrderShippingInclTax = Math.Round(order.OrderShippingExclTax * OrderTaxMuti , 2);
+
+                //Create Order Total Excl Tax
+                decimal OrderTotalExclTax = (order.OrderSubtotalExclTax + order.OrderShippingExclTax) - order.OrderDiscount;
+
+                //Order Tax
+                order.OrderTax = Math.Round(OrderTotalExclTax * OrderTaxRate,2);
+
+                //Order Total
+                order.OrderTotal = Math.Round(OrderTotalExclTax * OrderTaxMuti,2);
+
+                //Update Tax Rate
+                order.TaxRates = Math.Round(OrderTaxRate * 100.000M, 2) + ":"+ Math.Round(order.OrderTax, 2) + ";";
+
+                //Update Database
+                _orderService.UpdateOrder(order);
             }
-
-            //create billing/shipping address
-            Address posAddress = new Address
+            else
             {
-                Address1 = _rposSettings.StoreAddress,
-                City = _rposSettings.StoreCity,
-                StateProvinceId = _rposSettings.StoreStateProvinceId,
-                ZipPostalCode = _rposSettings.StorePostalCode,
-                CountryId = _rposSettings.StoreCountryId,
-                FirstName = "rPOS",
-                LastName = "Customer",
-                CreatedOnUtc = DateTime.UtcNow
-            };
+                //we have no items so clear all totals
+                ClearOrderTotals(order);
+            }
+        }
 
-            //add address
-            posCustomer.Addresses.Add(posAddress);
-            posCustomer.BillingAddress = posAddress;
-            posCustomer.ShippingAddress = posAddress;
-            _customerService.UpdateCustomer(posCustomer);
+        [NonAction]
+        protected virtual void ClearOrderTotals(Order order)
+        {
+            order.OrderSubtotalExclTax = 0M;
+            order.OrderSubtotalInclTax = 0M;
+            order.OrderSubTotalDiscountExclTax = 0M;
+            order.OrderSubTotalDiscountInclTax = 0M;
+            order.OrderTax = 0M;
+            order.OrderDiscount = 0M;
+            order.OrderTotal = 0M;
 
-            //return customer with new address
-            return posCustomer;
-
+            //Update Database
+            _orderService.UpdateOrder(order);
         }
 
         #endregion
+
+        #region Customer
+
+        private Customer GetCustomer()
+    {
+        string posCustomerEmail = "rpos_customer@do_not_use.com";
+        string posCustomerUserName = "rPOSCustomer_" + _authenticationService.GetAuthenticatedCustomer().Id.ToString();
+
+        Customer posCustomer = _customerService.GetCustomerByUsername(posCustomerUserName);
+
+        if (posCustomer == null)
+        {
+            //create customer
+            Guid posCustomerGuid = Guid.NewGuid();
+
+            posCustomer = new Customer
+            {
+                CustomerGuid = posCustomerGuid,
+                Email = posCustomerEmail,
+                Username = posCustomerUserName,
+                VendorId = 0,
+                AdminComment = "Created for POS store sales, do not modify this customer!",
+                IsTaxExempt = false,
+                Active = true,
+                CreatedOnUtc = DateTime.UtcNow,
+                LastActivityDateUtc = DateTime.UtcNow,
+            };
+            _customerService.InsertCustomer(posCustomer);
+
+            //get new customer
+            posCustomer = _customerService.GetCustomerByGuid(posCustomerGuid);
+        }
+
+        //create billing/shipping address
+        Address posAddress = new Address
+        {
+            Address1 = _rposSettings.StoreAddress,
+            City = _rposSettings.StoreCity,
+            StateProvinceId = _rposSettings.StoreStateProvinceId,
+            ZipPostalCode = _rposSettings.StorePostalCode,
+            CountryId = _rposSettings.StoreCountryId,
+            FirstName = "rPOS",
+            LastName = "Customer",
+            CreatedOnUtc = DateTime.UtcNow
+        };
+
+        //add address
+        posCustomer.Addresses.Add(posAddress);
+        posCustomer.BillingAddress = posAddress;
+        posCustomer.ShippingAddress = posAddress;
+        _customerService.UpdateCustomer(posCustomer);
+
+        //return customer with new address
+        return posCustomer;
+
+    }
+
+    #endregion
 
         #region Process Payment
 
