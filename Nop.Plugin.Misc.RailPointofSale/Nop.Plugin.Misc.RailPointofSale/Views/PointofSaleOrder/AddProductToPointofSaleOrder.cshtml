@@ -26,7 +26,7 @@
     <div class="content-header clearfix">
         <h1 class="pull-left">
             @string.Format(T("Admin.Orders.Products.AddNew.Title2").Text, Model.Name, Model.OrderId)
-            <small><i class="fa fa-arrow-circle-left"></i>@Html.ActionLink(T("Admin.Orders.Products.AddNew.BackToList").Text, "AddProductToOrder", new { orderId = Model.OrderId })</small>
+            <small><i class="fa fa-arrow-circle-left"></i>@Html.ActionLink(T("Admin.Orders.Products.AddNew.BackToList").Text, "Edit", new { id = Model.OrderId })</small>
         </h1>
         <div class="pull-right">
             &nbsp;
@@ -52,7 +52,7 @@
                 {
                     <div class="panel panel-default">
                         <div class="panel-body">
-                            <div class="form-group">
+                            <div class="form-group" style="display: none;">
                                 <div class="col-md-3">
                                     @Html.NopLabelFor(model => model.UnitPriceInclTax)
                                 </div>
@@ -76,7 +76,7 @@
                                     @Html.NopEditorFor(model => model.Quantity)
                                 </div>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group" style="display: none;">
                                 <div class="col-md-3">
                                     @Html.NopLabelFor(model => model.SubTotalInclTax)
                                 </div>
@@ -84,7 +84,7 @@
                                     @Html.NopEditorFor(model => model.SubTotalInclTax)
                                 </div>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group" style="display: none;">
                                 <div class="col-md-3">
                                     @Html.NopLabelFor(model => model.SubTotalExclTax)
                                 </div>

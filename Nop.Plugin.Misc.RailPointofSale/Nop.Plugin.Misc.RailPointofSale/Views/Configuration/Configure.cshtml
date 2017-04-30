@@ -80,6 +80,16 @@
                 </div>
                 <div class="form-group">
                     <div class="col-md-3">
+                        @Html.OverrideStoreCheckboxFor(model => model.StoreTaxRate_OverrideForStore, model => model.StoreTaxRate, Model.ActiveStoreScopeConfiguration)
+                        @Html.NopLabelFor(model => model.StoreTaxRate)
+                    </div>
+                    <div class="col-md-9">
+                        @Html.NopEditorFor(model => model.StoreTaxRate)
+                        @Html.ValidationMessageFor(model => model.StoreTaxRate)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-3">
                         @Html.OverrideStoreCheckboxFor(model => model.StorePaymentMethodSystemName_OverrideForStore, model => model.StorePaymentMethodSystemName, Model.ActiveStoreScopeConfiguration)
                         @Html.NopLabelFor(model => model.StorePaymentMethodSystemName)
                     </div>

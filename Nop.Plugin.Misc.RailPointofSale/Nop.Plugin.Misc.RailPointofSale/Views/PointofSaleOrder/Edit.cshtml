@@ -12,7 +12,7 @@
 @using Nop.Services
 @using Nop.Web.Framework
 
-@using (Html.BeginForm(null, null, FormMethod.Post, new { id = "order-form" }))
+@using (Html.BeginForm())
 {
 
 @Html.AntiForgeryToken()
@@ -21,22 +21,22 @@
     <div class="pull-right">
         @if (Model.OrderStatusId != 30 && Model.OrderStatusId != 40)
         {
-        <button type="submit" name="process-order" class="btn bg-green" onclick="location.href='@Url.Action("ProcessPointofSaleOrder", "PointofSaleOrder", new { id = Model.Id })'">
+        <button type="button" name="process-order" class="btn bg-green" onclick="location.href='@Url.Action("ProcessPointofSaleOrder", "PointofSaleOrder", new { id = Model.Id })'">
             <i class="fa fa-usd"></i>
             Process Order
         </button>
-        <button type="submit" name="suspend-order" class="btn bg-yellow" onclick="location.href='@Url.Action("List", "PointofSaleOrder")'">
+        <button type="button" name="suspend-order" class="btn bg-yellow" onclick="location.href='@Url.Action("List", "PointofSaleOrder")'">
             <i class="fa fa-pause"></i>
             Suspend Order
         </button>
-        <span id="order-delete" class="btn bg-red">
+        <button type="button" name="delete-order" class="btn bg-red" onclick="location.href='@Url.Action("Delete", "PointofSaleOrder", new { id = Model.Id })'">
             <i class="fa fa-trash-o"></i>
             @T("Admin.Common.Delete")
-        </span>
+        </button>
         }
         else
         {
-            <button type="submit" name="suspend-order" class="btn bg-blue" onclick="location.href='@Url.Action("List", "PointofSaleOrder")'">
+            <button type="button" name="suspend-order" class="btn bg-blue" onclick="location.href='@Url.Action("List", "PointofSaleOrder")'">
                 <i class="fa fa-arrow-left"></i>
                 Back to rPOS Order List
             </button>

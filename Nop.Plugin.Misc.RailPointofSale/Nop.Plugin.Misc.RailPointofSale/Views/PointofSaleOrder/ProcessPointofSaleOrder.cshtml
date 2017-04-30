@@ -8,7 +8,6 @@
     Html.SetActiveMenuItemSystemName("Misc.RailPointofSale");
 }
 
-@Html.AntiForgeryToken()
 <style>
     .payment-info input, .payment-info select {
         height: 36px;
@@ -16,6 +15,30 @@
         padding: 8px;
         vertical-align: middle;
         margin-bottom: 5px;
+    }
+
+    h2 {
+        margin-top: 3px;
+    }
+
+    #rPosPaymentContainer input {
+        width: 250px !important;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        display: block;
+        height: 34px;
+        padding: 6px 12px;
+        font-size: 14px;
+        line-height: 1.42857143;
+        color: #555;
+    }
+
+    #rPosPaymentContainer .label-wrapper {
+        margin-right: 30px;
+    }
+
+    #rPosPaymentContainer .custom-custom-billing-label {
+        text-align: right;
     }
 </style>
 
@@ -80,7 +103,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div id="rPosPaymentContainer" class="col-md-6">
                 <div class="panel panel-default">
                     <div class="panel-body">
                         <div class="page checkout-page payment-info-page">
@@ -92,25 +115,52 @@
                                 <div class="section payment-info">
                                     @using (Html.BeginForm("EnterPaymentInfo", "PointofSaleOrder", FormMethod.Post))
                                     {
+                                        @Html.AntiForgeryToken()
+
                                         var validationSummary = Html.ValidationSummary(false);
                                         if (!MvcHtmlString.IsNullOrEmpty(validationSummary))
                                         {
                                             <div class="message-error">@validationSummary</div>
                                         }
+                                        <h3>Customer Payment</h3>
                                         <div class="info">
                                             @Html.Action(Model.PaymentInfoActionName, Model.PaymentInfoControllerName, Model.PaymentInfoRouteValues)
                                         </div>
+                                        <h3>Customer Billing Info</h3>
                                         <div class="form-group">
-                                            <div class="col-md-4" style="width: 218.733px">
-                                                <label style="padding-top: 8px;">Customer Email Address:</label>
+                                            <div class="col-md-4 custom-custom-billing-label">
+                                                <label style="padding-top: 8px;">First Name</label>
                                             </div>
                                             <div class="col-md-6">
-                                                <input id="Text1" type="text" style="width: 250px;" />
+                                                @Html.TextBoxFor(m => m.CustomerFirstName)
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="col-md-4 custom-custom-billing-label">
+                                                <label style="padding-top: 8px;">Last Name</label>
+                                            </div>
+                                            <div class="col-md-6">
+                                                @Html.TextBoxFor(m => m.CustomerLastName)
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="col-md-4 custom-custom-billing-label">
+                                                <label style="padding-top: 8px;">Email Address</label>
+                                            </div>
+                                            <div class="col-md-6">
+                                                @Html.TextBoxFor(m => m.CustomerEmailAddress)
                                             </div>
                                         </div>
                                         @Html.HiddenFor(model => model.rPosOrderModel.Id, "Value");
                                         <div class="buttons">
-                                            <input type="submit" name="processpayment" value="Process rPOS Order" class="button-1 payment-info-next-step-button" />
+                                            <button type="submit" name="processpayment" class="btn bg-green">
+                                                <i class="fa fa-usd"></i>
+                                                Process Payment
+                                            </button>
+                                            <button type="button" name="cancel-process" class="btn bg-red" onclick="location.href='@Url.Action("Edit", "PointofSaleOrder", new { id = Model.rPosOrderModel.Id })'">
+                                                <i class="fa fa-pause"></i>
+                                                Cancel Payment
+                                            </button>
                                         </div>
                                     }
                                 </div>

@@ -10,6 +10,7 @@ namespace Nop.Plugin.Misc.RailPointofSale
         public int StoreStateProvinceId { get; set; }
         public string StorePostalCode { get; set; }
         public int StoreCountryId { get; set; }
+        public decimal StoreTaxRate { get; set; }
         public string StorePaymentMethodSystemName { get; set; }
     }
 }

@@ -66,6 +66,7 @@ namespace Nop.Plugin.Misc.RailPointofSale
                 StoreStateProvinceId = 0,
                 StorePostalCode = "",
                 StoreCountryId = 0,
+                StoreTaxRate = 8.95M,
                 StorePaymentMethodSystemName = ""
             };
             _settingService.SaveSetting(settings);
@@ -87,6 +88,9 @@ namespace Nop.Plugin.Misc.RailPointofSale
 
             this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId", "Store Country");
             this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId.Hint", "The country your point-of-sale store is located in. Can be useful for tax calculation.");
+
+            this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreTaxRate", "Store Tax Rate");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreTaxRate.Hint", "The tax rate for your point-of-sale store. Can be useful for tax calculation.");
 
             this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName", "Store Payment Method");
             this.AddOrUpdatePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName.Hint", "Select the payment method that will be used for the point-of-sale store.");
@@ -115,6 +119,9 @@ namespace Nop.Plugin.Misc.RailPointofSale
 
             this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId");
             this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreCountryId.Hint");
+
+            this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreTaxRate");
+            this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StoreTaxRate.Hint");
 
             this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName");
             this.DeletePluginLocaleResource("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName.Hint");

@@ -80,6 +80,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             model.StoreStateProvinceId = railPOSSettings.StoreStateProvinceId;
             model.StorePostalCode = railPOSSettings.StorePostalCode;
             model.StoreCountryId = railPOSSettings.StoreCountryId;
+            model.StoreTaxRate = railPOSSettings.StoreTaxRate;
             model.StorePaymentMethodSystemName = railPOSSettings.StorePaymentMethodSystemName;
             model.ActiveStoreScopeConfiguration = storeScope;
 
@@ -121,6 +122,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             railPOSSettings.StoreStateProvinceId = model.StoreStateProvinceId;
             railPOSSettings.StorePostalCode = model.StorePostalCode;
             railPOSSettings.StoreCountryId = model.StoreCountryId;
+            railPOSSettings.StoreTaxRate = model.StoreTaxRate;
             railPOSSettings.StorePaymentMethodSystemName = model.StorePaymentMethodSystemName;
 
             /* We do not clear cache after each setting update.
@@ -132,6 +134,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StoreStateProvinceId, model.StoreStateProvinceId_OverrideForStore, storeScope, false);
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StorePostalCode, model.StorePostalCode_OverrideForStore, storeScope, false);
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StoreCountryId, model.StoreCountryId_OverrideForStore, storeScope, false);
+            _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StoreTaxRate, model.StoreTaxRate_OverrideForStore, storeScope, false);
             _settingService.SaveSettingOverridablePerStore(railPOSSettings, x => x.StorePaymentMethodSystemName, model.StorePaymentMethodSystemName_OverrideForStore, storeScope, false);
 
             //now clear settings cache

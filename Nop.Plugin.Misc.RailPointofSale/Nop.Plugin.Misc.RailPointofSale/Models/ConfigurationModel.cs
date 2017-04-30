@@ -46,6 +46,11 @@ namespace Nop.Plugin.Misc.RailPointofSale.Model
         public int StoreCountryId { get; set; }
         public bool StoreCountryId_OverrideForStore { get; set; }
 
+        [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StoreTaxRate")]
+        [AllowHtml]
+        public decimal StoreTaxRate { get; set; }
+        public bool StoreTaxRate_OverrideForStore { get; set; }
+
         [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StorePaymentMethodSystemName")]
         [AllowHtml]
         public string StorePaymentMethodSystemName { get; set; }

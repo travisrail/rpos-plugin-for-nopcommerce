@@ -46,6 +46,8 @@ using Nop.Plugin.Misc.RailPointofSale.Models;
 using Nop.Services.Configuration;
 using Nop.Services.Authentication;
 using Nop.Services.Customers;
+using Nop.Core.Domain.Messages;
+using Nop.Services.Events;
 
 namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 {
@@ -98,6 +100,12 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         private readonly IAuthenticationService _authenticationService;
         private readonly ICustomerService _customerService;
         private readonly IGenericAttributeService _genericAttributeService;
+        private readonly IMessageTemplateService _messageTemplateService;
+        private readonly IMessageTokenProvider _messageTokenProvider;
+        private readonly IEventPublisher _eventPublisher;
+        private readonly IEmailAccountService _emailAccountService;
+        private readonly ITokenizer _tokenizer;
+        private readonly IQueuedEmailService _queuedEmailService;
 
         private readonly OrderSettings _orderSettings;
         private readonly CurrencySettings _currencySettings;
@@ -158,6 +166,13 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             IAuthenticationService authenticationService,
             ICustomerService customerService,
             IGenericAttributeService genericAttributeService,
+            IMessageTemplateService messageTemplateService,
+            IMessageTokenProvider messageTokenProvider,
+            IEventPublisher eventPublisher,
+            IEmailAccountService emailAccountService,
+            ITokenizer tokenizer,
+            IQueuedEmailService queuedEmailService,
+
             OrderSettings orderSettings,
             CurrencySettings currencySettings,
             TaxSettings taxSettings,
@@ -217,6 +232,12 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             this._measureSettings = measureSettings;
             this._addressSettings = addressSettings;
             this._shippingSettings = shippingSettings;
+            this._messageTemplateService = messageTemplateService;
+            this._messageTokenProvider = messageTokenProvider;
+            this._eventPublisher = eventPublisher;
+            this._emailAccountService = emailAccountService;
+            this._tokenizer = tokenizer;
+            this._queuedEmailService = queuedEmailService;
 
             this._rposSettings = _settingService.LoadSetting<RailPointofSaleSettings>();
         }
@@ -254,6 +275,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 PaymentMethodSystemName = _rposSettings.StorePaymentMethodSystemName,
                 OrderStatus = OrderStatus.Pending,
                 CustomerCurrencyCode = "USD",
+                CurrencyRate = 1.00M,
                 CreatedOnUtc = DateTime.Now.ToUniversalTime(),
             };
 
@@ -315,6 +337,10 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
                 //a vendor should have access only to orders with his products
                 model.IsLoggedInAsVendor = _workContext.CurrentVendor != null;
+
+                //set default days
+                model.StartDate = (DateTime?)_dateTimeHelper.ConvertToUtcTime(DateTime.Now, _dateTimeHelper.CurrentTimeZone);
+                model.EndDate = (DateTime?)_dateTimeHelper.ConvertToUtcTime(DateTime.Now, _dateTimeHelper.CurrentTimeZone).AddDays(1);
 
                 return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/List.cshtml", model);
             }
@@ -918,7 +944,6 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             #endregion
         }
 
-        [HttpPost]
         public ActionResult Delete(int id)
         {
             if (!HasAccessToPos())
@@ -932,7 +957,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
             //delete order
             _orderService.DeleteOrder(order);
-            
+
             return RedirectToAction("List");
         }
 
@@ -1076,7 +1101,6 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
         }
-
 
         #endregion
 
@@ -1250,7 +1274,10 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                     }
                 }
 
-                SuccessNotification("Item "+ orderItem.Product.Name +" successfully added to order!");
+                //Calculate Order Total
+                UpdateOrderTotals(order);
+
+                SuccessNotification("Item " + orderItem.Product.Name + " successfully added to order!");
 
                 //redirect to order details page
                 return RedirectToAction("Edit", "PointofSaleOrder", new { id = order.Id });
@@ -1480,7 +1507,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 decimal OrderTaxMuti = 0.0000M;
                 if (!String.IsNullOrEmpty(order.TaxRates))
                 {
-                    OrderTaxRate = Convert.ToDecimal(order.TaxRates.Split(';')[0].Split(':')[0]) / 100.0000M;
+                    OrderTaxRate = _rposSettings.StoreTaxRate / 100.0000M;
                     OrderTaxMuti = OrderTaxRate + 1;
                 }
 
@@ -1495,7 +1522,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                     item.PriceExclTax = (item.UnitPriceExclTax * item.Quantity) - item.DiscountAmountExclTax;
 
                     //Calculate Tax On Item
-                    item.UnitPriceInclTax = Math.Round(item.UnitPriceExclTax * OrderTaxMuti,2);
+                    item.UnitPriceInclTax = Math.Round(item.UnitPriceExclTax * OrderTaxMuti, 2);
                     item.PriceInclTax = Math.Round(item.PriceExclTax * OrderTaxMuti, 2);
                     item.DiscountAmountInclTax = Math.Round(item.DiscountAmountExclTax, 2);
 
@@ -1509,19 +1536,19 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 order.OrderSubtotalInclTax = OrderSubTotalInclTax;
 
                 //Order Shipping Tax
-                order.OrderShippingInclTax = Math.Round(order.OrderShippingExclTax * OrderTaxMuti , 2);
+                order.OrderShippingInclTax = Math.Round(order.OrderShippingExclTax * OrderTaxMuti, 2);
 
                 //Create Order Total Excl Tax
                 decimal OrderTotalExclTax = (order.OrderSubtotalExclTax + order.OrderShippingExclTax) - order.OrderDiscount;
 
                 //Order Tax
-                order.OrderTax = Math.Round(OrderTotalExclTax * OrderTaxRate,2);
+                order.OrderTax = Math.Round(OrderTotalExclTax * OrderTaxRate, 2);
 
                 //Order Total
-                order.OrderTotal = Math.Round(OrderTotalExclTax * OrderTaxMuti,2);
+                order.OrderTotal = Math.Round(OrderTotalExclTax * OrderTaxMuti, 2);
 
                 //Update Tax Rate
-                order.TaxRates = Math.Round(OrderTaxRate * 100.000M, 2) + ":"+ Math.Round(order.OrderTax, 2) + ";";
+                order.TaxRates = Math.Round(OrderTaxRate * 100.000M, 2) + ":" + Math.Round(order.OrderTax, 2) + ";";
 
                 //Update Database
                 _orderService.UpdateOrder(order);
@@ -1548,68 +1575,103 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             _orderService.UpdateOrder(order);
         }
 
+        [NonAction]
+        protected virtual TaxAmountResult CalculateTax(decimal ValueAmt)
+        {
+            return new TaxAmountResult
+            {
+                AmountIncTax = ValueAmt + (ValueAmt * (_rposSettings.StoreTaxRate / 100M)),
+                AmountExcTax = ValueAmt,
+                TaxAmount = ValueAmt * (_rposSettings.StoreTaxRate / 100M),
+                TaxRateInfo = _rposSettings.StoreTaxRate.ToString() + ":" + (ValueAmt * (_rposSettings.StoreTaxRate / 100.0000M)).ToString() + ";"
+            };
+        }
+
         #endregion
 
         #region Customer
 
         private Customer GetCustomer()
-    {
-        string posCustomerEmail = "rpos_customer@do_not_use.com";
-        string posCustomerUserName = "rPOSCustomer_" + _authenticationService.GetAuthenticatedCustomer().Id.ToString();
-
-        Customer posCustomer = _customerService.GetCustomerByUsername(posCustomerUserName);
-
-        if (posCustomer == null)
         {
-            //create customer
-            Guid posCustomerGuid = Guid.NewGuid();
+            string posCustomerEmail = "rpos_customer@do_not_use.com";
+            string posCustomerUserName = "rPOSCustomer_" + _authenticationService.GetAuthenticatedCustomer().Id.ToString();
 
-            posCustomer = new Customer
+            Customer posCustomer = _customerService.GetCustomerByUsername(posCustomerUserName);
+
+            if (posCustomer == null)
             {
-                CustomerGuid = posCustomerGuid,
-                Email = posCustomerEmail,
-                Username = posCustomerUserName,
-                VendorId = 0,
-                AdminComment = "Created for POS store sales, do not modify this customer!",
-                IsTaxExempt = false,
-                Active = true,
-                CreatedOnUtc = DateTime.UtcNow,
-                LastActivityDateUtc = DateTime.UtcNow,
-            };
-            _customerService.InsertCustomer(posCustomer);
+                //create customer
+                Guid posCustomerGuid = Guid.NewGuid();
 
-            //get new customer
-            posCustomer = _customerService.GetCustomerByGuid(posCustomerGuid);
+                posCustomer = new Customer
+                {
+                    CustomerGuid = posCustomerGuid,
+                    Email = posCustomerEmail,
+                    Username = posCustomerUserName,
+                    VendorId = 0,
+                    AdminComment = "Created for POS store sales, do not modify this customer!",
+                    IsTaxExempt = false,
+                    Active = true,
+                    CreatedOnUtc = DateTime.UtcNow,
+                    LastActivityDateUtc = DateTime.UtcNow,
+                };
+                _customerService.InsertCustomer(posCustomer);
+
+                //get new customer
+                posCustomer = _customerService.GetCustomerByGuid(posCustomerGuid);
+
+                //update extended info - first and last name
+                GenericAttribute gaFirstName = new GenericAttribute
+                {
+                    EntityId = posCustomer.Id,
+                    KeyGroup = "Customer",
+                    Key = "FirstName",
+                    Value = "POS",
+                    StoreId = _rposSettings.StoreId
+                };
+
+                _genericAttributeService.InsertAttribute(gaFirstName);
+
+                GenericAttribute gaLastName = new GenericAttribute
+                {
+                    EntityId = posCustomer.Id,
+                    KeyGroup = "Customer",
+                    Key = "LastName",
+                    Value = "Customer #" + posCustomer.Id.ToString(),
+                    StoreId = _rposSettings.StoreId
+                };
+
+                _genericAttributeService.InsertAttribute(gaLastName);
+            }
+
+            //create billing/shipping address
+            Address posAddress = new Address
+            {
+                Address1 = _rposSettings.StoreAddress,
+                City = _rposSettings.StoreCity,
+                StateProvinceId = _rposSettings.StoreStateProvinceId,
+                ZipPostalCode = _rposSettings.StorePostalCode,
+                CountryId = _rposSettings.StoreCountryId,
+                FirstName = "rPOS",
+                LastName = "Customer",
+                CreatedOnUtc = DateTime.UtcNow
+            };
+
+            //add address
+            posCustomer.Addresses.Add(posAddress);
+            posCustomer.BillingAddress = posAddress;
+            posCustomer.ShippingAddress = posAddress;
+            _customerService.UpdateCustomer(posCustomer);
+
+            //return customer with new address
+            return posCustomer;
+
         }
 
-        //create billing/shipping address
-        Address posAddress = new Address
-        {
-            Address1 = _rposSettings.StoreAddress,
-            City = _rposSettings.StoreCity,
-            StateProvinceId = _rposSettings.StoreStateProvinceId,
-            ZipPostalCode = _rposSettings.StorePostalCode,
-            CountryId = _rposSettings.StoreCountryId,
-            FirstName = "rPOS",
-            LastName = "Customer",
-            CreatedOnUtc = DateTime.UtcNow
-        };
-
-        //add address
-        posCustomer.Addresses.Add(posAddress);
-        posCustomer.BillingAddress = posAddress;
-        posCustomer.ShippingAddress = posAddress;
-        _customerService.UpdateCustomer(posCustomer);
-
-        //return customer with new address
-        return posCustomer;
-
-    }
-
-    #endregion
+        #endregion
 
         #region Process Payment
-
+        [HttpGet]
         public ActionResult ProcessPointofSaleOrder(int id)
         {
             if (!HasAccessToPos())
@@ -1631,6 +1693,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult EnterPaymentInfo(FormCollection form)
         {
             if (!HasAccessToPos())
@@ -1639,6 +1702,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //create order model
             int orderId = Convert.ToInt32(form["rPosOrderModel.Id"]);
             string customerEmail = form["CustomerEmailAddress"];
+            string customerFirstName = form["CustomerFirstName"];
+            string customerLastName = form["CustomerLastName"];
             var order = _orderService.GetOrderById(orderId);
             RailPointofSaleOrderModel _rPOSOrderModel = new RailPointofSaleOrderModel();
             PrepareOrderDetailsModel(_rPOSOrderModel, order);
@@ -1665,13 +1730,23 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 processPaymentRequest.PaymentMethodSystemName = order.PaymentMethodSystemName;
                 var paymentResult = _paymentService.ProcessPayment(processPaymentRequest);
 
-                if (paymentResult.Success) //we successfully processed the credi card payment
+                if (paymentResult.Success) //we successfully processed the credit card payment
                 {
                     //update order payment status
-                    UpdateSuccessfulOrder(order, paymentResult, processPaymentRequest, customerEmail);
+                    UpdateSuccessfulOrder(order, paymentResult, processPaymentRequest, customerEmail, customerFirstName, customerLastName);
 
-                    //redriect back to finished screen
-                    RedirectToAction("Edit", "PointofSaleOrder", new { id = order.Id });
+                    //email customer receipt
+                    EmailCustomerReceipt(order, customerEmail);
+
+                    //notify of process
+                    SuccessNotification("Order #" + order.Id.ToString() + " payment has been processed! Email receipt sent to " + customerEmail + "!");
+
+                    //redirect back to finished screen
+                    return RedirectToAction("List");
+                }
+                else
+                {
+                    ErrorNotification("Failed to process payment for order #" + order.Id.ToString() + ". Reason: " + String.Join(" ; ", paymentResult.Errors.ToArray()));
                 }
             }
 
@@ -1697,14 +1772,14 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         }
 
         [NonAction]
-        protected virtual void UpdateSuccessfulOrder(Order order, ProcessPaymentResult result, ProcessPaymentRequest request, String customerEmail)
+        protected virtual void UpdateSuccessfulOrder(Order order, ProcessPaymentResult result, ProcessPaymentRequest request, String customerEmail, string customerFirstName, string customerLastName)
         {
             //update order payment status
             //order status
             order.OrderStatus = OrderStatus.Complete;
             order.PaymentStatus = PaymentStatus.Paid;
             order.ShippingStatus = ShippingStatus.ShippingNotRequired;
-            
+
             //order transaction data
             order.AuthorizationTransactionCode = result.AuthorizationTransactionCode;
             order.AuthorizationTransactionId = result.AuthorizationTransactionId;
@@ -1712,17 +1787,14 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             order.CaptureTransactionId = result.CaptureTransactionId;
             order.CaptureTransactionResult = result.CaptureTransactionResult;
             order.SubscriptionTransactionId = result.SubscriptionTransactionId;
-            
+
             //order email address
             order.ShippingAddress.Email = customerEmail;
             order.BillingAddress.Email = customerEmail;
 
             //update ordername
-            order.ShippingAddress.FirstName = request.CreditCardName;
-            order.BillingAddress.FirstName = request.CreditCardName;
-
-            //update order
-            _orderService.UpdateOrder(order);
+            order.BillingAddress.FirstName = customerFirstName;
+            order.BillingAddress.LastName = customerLastName;
 
             //create shipments
             Shipment shipm = new Shipment
@@ -1739,7 +1811,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //add shipment items
             foreach (var item in order.OrderItems)
             {
-                ShipmentItem si = new ShipmentItem {
+                ShipmentItem si = new ShipmentItem
+                {
                     OrderItemId = item.Id,
                     Quantity = item.Quantity
                 };
@@ -1749,8 +1822,74 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
             //update in database
             _shipmentService.InsertShipment(shipm);
-   
-            //send customer email
+
+            //update order
+            _orderService.UpdateOrder(order);
+        }
+
+        [NonAction]
+        protected virtual void EmailCustomerReceipt(Order order, String customerEmail)
+        {
+            var messageTemplate = _messageTemplateService.GetMessageTemplateByName("OrderPaid.CustomerNotification", _rposSettings.StoreId);
+            var store = _storeService.GetStoreById(_rposSettings.StoreId);
+
+            //email account
+            var emailAccount = _emailAccountService.GetEmailAccountById(messageTemplate.EmailAccountId);
+
+            //tokens
+            var tokens = new List<Token>();
+            _messageTokenProvider.AddStoreTokens(tokens, store, emailAccount);
+            _messageTokenProvider.AddOrderTokens(tokens, order, 1);
+            _messageTokenProvider.AddCustomerTokens(tokens, order.Customer);
+
+            //event notification
+            _eventPublisher.MessageTokensAdded(messageTemplate, tokens);
+
+            var toEmail = order.BillingAddress.Email;
+            var toName = string.Format("{0} {1}", order.BillingAddress.FirstName, order.BillingAddress.LastName);
+            SendNotification(messageTemplate, emailAccount, 1, tokens, toEmail, toName);
+        }
+
+        [NonAction]
+        protected virtual int SendNotification(MessageTemplate messageTemplate, EmailAccount emailAccount, int languageId, IEnumerable<Token> tokens, string toEmailAddress, string toName)
+        {
+            if (messageTemplate == null)
+                throw new ArgumentNullException("messageTemplate");
+            if (emailAccount == null)
+                throw new ArgumentNullException("emailAccount");
+
+            //retrieve localized message template data
+            var bcc = messageTemplate.GetLocalized(mt => mt.BccEmailAddresses, languageId);
+            var subject = messageTemplate.GetLocalized(mt => mt.Subject, languageId);
+            var body = messageTemplate.GetLocalized(mt => mt.Body, languageId);
+
+            //Replace subject and body tokens 
+            var subjectReplaced = _tokenizer.Replace(subject, tokens, false);
+            var bodyReplaced = _tokenizer.Replace(body, tokens, true);
+
+            //limit name length
+            toName = CommonHelper.EnsureMaximumLength(toName, 300);
+
+            var email = new QueuedEmail
+            {
+                Priority = QueuedEmailPriority.High,
+                From = emailAccount.Email,
+                FromName = emailAccount.DisplayName,
+                To = toEmailAddress,
+                ToName = toName,
+                CC = string.Empty,
+                Bcc = bcc,
+                Subject = subjectReplaced,
+                Body = bodyReplaced,
+                AttachedDownloadId = messageTemplate.AttachedDownloadId,
+                CreatedOnUtc = DateTime.UtcNow,
+                EmailAccountId = emailAccount.Id,
+                DontSendBeforeDateUtc = !messageTemplate.DelayBeforeSend.HasValue ? null
+                    : (DateTime?)(DateTime.UtcNow + TimeSpan.FromHours(messageTemplate.DelayPeriod.ToHours(messageTemplate.DelayBeforeSend.Value)))
+            };
+
+            _queuedEmailService.InsertQueuedEmail(email);
+            return email.Id;
         }
 
         #endregion
@@ -1800,4 +1939,16 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
         #endregion
 
     }
+
+    #region Data Types
+
+    public class TaxAmountResult
+    {
+        public decimal AmountIncTax { get; set; }
+        public decimal AmountExcTax { get; set; }
+        public decimal TaxAmount { get; set; }
+        public string TaxRateInfo { get; set; }
+    }
+
+    #endregion
 }
