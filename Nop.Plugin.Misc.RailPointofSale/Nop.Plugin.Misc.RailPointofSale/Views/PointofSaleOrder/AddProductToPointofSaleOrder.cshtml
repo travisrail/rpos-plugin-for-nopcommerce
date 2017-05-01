@@ -5,19 +5,20 @@
     Html.SetActiveMenuItemSystemName("Misc.RailPointofSale");
 }
 
-@model Nop.Admin.Models.Orders.OrderModel.AddOrderProductModel.ProductDetailsModel
+@model AddPosProductModel
 
 @using Nop.Core.Domain.Catalog
+@using Nop.Plugin.Misc.RailPointofSale.Models
 
 @{
     //page title
-    ViewBag.Title = string.Format(T("Admin.Orders.Products.AddNew.Title2").Text, Model.Name, Model.OrderId);
+    ViewBag.Title = string.Format(T("Admin.Orders.Products.AddNew.Title2").Text, Model.ProductDetails.Name, Model.ProductDetails.OrderId);
 
 }
 
 @*we add enctype = "multipart/form-data" because "File upload" attribute control type requires it*@
 @using (Html.BeginForm("AddProductToPOSOrderDetails", "PointofSaleOrder",
-                                                                new RouteValueDictionary(new { orderId = Model.OrderId, productId = Model.ProductId }),
+                                                                new RouteValueDictionary(new { orderId = Model.ProductDetails.OrderId, productId = Model.ProductDetails.ProductId }),
                                                                 FormMethod.Post,
                                                                 new Dictionary<string, Object> { { "enctype", "multipart/form-data" }, { "id", "product-details-form" } }))
 {
@@ -25,8 +26,8 @@
     @Html.ValidationSummary(false)
     <div class="content-header clearfix">
         <h1 class="pull-left">
-            @string.Format(T("Admin.Orders.Products.AddNew.Title2").Text, Model.Name, Model.OrderId)
-            <small><i class="fa fa-arrow-circle-left"></i>@Html.ActionLink(T("Admin.Orders.Products.AddNew.BackToList").Text, "Edit", new { id = Model.OrderId })</small>
+            @string.Format(T("Admin.Orders.Products.AddNew.Title2").Text, Model.ProductDetails.Name, Model.ProductDetails.OrderId)
+            <small><i class="fa fa-arrow-circle-left"></i>@Html.ActionLink(T("Admin.Orders.Products.AddNew.BackToList").Text, "Edit", new { id = Model.ProductDetails.OrderId })</small>
         </h1>
         <div class="pull-right">
             &nbsp;
@@ -34,11 +35,11 @@
     </div>
 
     <div class="content">
-        @if (Model.Warnings.Count > 0)
+        @if (Model.ProductDetails.Warnings.Count > 0)
         {
             <div class="callout callout-danger">
                 <ul>
-                    @foreach (var warning in Model.Warnings)
+                    @foreach (var warning in Model.ProductDetails.Warnings)
                     {
                         <li>@warning</li>
                     }
@@ -48,64 +49,80 @@
 
         <div class="form-horizontal">
             <div class="panel-group">
-                @if (Model.ProductType == ProductType.SimpleProduct)
+                @if (Model.ProductDetails.ProductType == ProductType.SimpleProduct)
                 {
                     <div class="panel panel-default">
                         <div class="panel-body">
-                            <div class="form-group" style="display: none;">
-                                <div class="col-md-3">
-                                    @Html.NopLabelFor(model => model.UnitPriceInclTax)
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h1 style="margin-top: 0;">@Model.AddProduct.Name</h1>
+                                    <div class="form-group" style="display: none;">
+                                        <div class="col-md-6">
+                                            @Html.NopLabelFor(model => model.ProductDetails.UnitPriceInclTax)
+                                        </div>
+                                        <div class="col-md-6">
+                                            @Html.NopEditorFor(model => model.ProductDetails.UnitPriceInclTax)
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="col-md-6">
+                                            @Html.NopLabelFor(model => model.ProductDetails.UnitPriceExclTax)
+                                        </div>
+                                        <div class="col-md-6">
+                                            @Html.NopEditorFor(model => model.ProductDetails.UnitPriceExclTax)
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="col-md-6">
+                                            @Html.NopLabelFor(model => model.ProductDetails.Quantity)
+                                        </div>
+                                        <div class="col-md-6">
+                                            @Html.NopEditorFor(model => model.ProductDetails.Quantity)
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="display: none;">
+                                        <div class="col-md-6">
+                                            @Html.NopLabelFor(model => model.ProductDetails.SubTotalInclTax)
+                                        </div>
+                                        <div class="col-md-6">
+                                            @Html.NopEditorFor(model => model.ProductDetails.SubTotalInclTax)
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="display: none;">
+                                        <div class="col-md-6">
+                                            @Html.NopLabelFor(model => model.ProductDetails.SubTotalExclTax)
+                                        </div>
+                                        <div class="col-md-6">
+                                            @Html.NopEditorFor(model => model.ProductDetails.SubTotalExclTax)
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-9">
-                                    @Html.NopEditorFor(model => model.UnitPriceInclTax)
+                                <div class="col-md-6">
+                                    <h1 style="margin-top: 0;">Details</h1>
+                                    <img src="@Model.ProductPicture" />
+                                    <p>SKU @Model.AddProduct.Sku</p>
+                                    <p>@if (Model.ProductVendor != null)
+                                    { @:Vendor @Model.ProductVendor.Name;
+                                    } </p>
+
+                                    <p>@Model.AddProduct.ShortDescription</p>
+
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="col-md-3">
-                                    @Html.NopLabelFor(model => model.UnitPriceExclTax)
-                                </div>
-                                <div class="col-md-9">
-                                    @Html.NopEditorFor(model => model.UnitPriceExclTax)
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="col-md-3">
-                                    @Html.NopLabelFor(model => model.Quantity)
-                                </div>
-                                <div class="col-md-9">
-                                    @Html.NopEditorFor(model => model.Quantity)
-                                </div>
-                            </div>
-                            <div class="form-group" style="display: none;">
-                                <div class="col-md-3">
-                                    @Html.NopLabelFor(model => model.SubTotalInclTax)
-                                </div>
-                                <div class="col-md-9">
-                                    @Html.NopEditorFor(model => model.SubTotalInclTax)
-                                </div>
-                            </div>
-                            <div class="form-group" style="display: none;">
-                                <div class="col-md-3">
-                                    @Html.NopLabelFor(model => model.SubTotalExclTax)
-                                </div>
-                                <div class="col-md-9">
-                                    @Html.NopEditorFor(model => model.SubTotalExclTax)
-                                </div>
-                            </div>
+                             </div>
                         </div>
                     </div>
 
-                    @Html.Partial("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/_ProductAddAttributes.cshtml", Model.ProductAttributes, new ViewDataDictionary() { new KeyValuePair<string, object>("productId", Model.ProductId) })
+          @Html.Partial("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/_ProductAddAttributes.cshtml", Model.ProductDetails.ProductAttributes, new ViewDataDictionary() { new KeyValuePair<string, object>("productId", Model.ProductDetails.ProductId) })
 
                     @*var dataDictGiftCard = new ViewDataDictionary();
                     dataDictGiftCard.TemplateInfo.HtmlFieldPrefix = "giftcard";
-                    @Html.Partial("_ProductAddGiftCardInfo", Model.GiftCard, dataDictGiftCard)
+                    @Html.Partial("_ProductAddGiftCardInfo", Model.ProductDetails.GiftCard, dataDictGiftCard)
 
-                    @Html.Partial("_ProductAddRentalInfo", Model)*@
+                    @Html.Partial("_ProductAddRentalInfo", Model.ProductDetails)*@
 
                     <div class="panel panel-default">
                         <div class="panel-body">
-                            @if (!Model.AutoUpdateOrderTotals)
+                            @if (!Model.ProductDetails.AutoUpdateOrderTotals)
                             {
                                 <div class="form-group">
                                     <div class="col-md-9 col-md-offset-3">
@@ -125,7 +142,7 @@
                         </div>
                     </div>
                 }
-                else if (Model.ProductType == ProductType.GroupedProduct)
+                else if (Model.ProductDetails.ProductType == ProductType.GroupedProduct)
                 {
                     <div class="panel panel-default">
                         <div class="panel-body">

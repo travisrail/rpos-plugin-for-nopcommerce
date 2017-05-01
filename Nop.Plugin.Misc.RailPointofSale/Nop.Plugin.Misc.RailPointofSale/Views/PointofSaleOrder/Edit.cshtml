@@ -191,15 +191,15 @@
                                 <tbody>
                                     @foreach (var product in Model.AvailableProducts)
                                     {
-                            <tr>
-                                <td><button type="button" onclick="addProductToOrder(@product.Id.ToString())" class="btn btn-default">@T("Admin.Common.Select")</button></td>
-                                <td>@product.Id</td>
-                                <td><img src="@product.ProductThumbnail" /></td>
-                                <td>@product.Vendor</td>
-                                <td>@product.Sku</td>
-                                <td>@product.Name</td>
-                                <td>@product.Price.ToString("$#.00")</td>
-                            </tr>
+                                        <tr>
+                                            <td><button type="button" onclick="addProductToOrder(@product.Id.ToString())" class="btn btn-default">@T("Admin.Common.Select")</button></td>
+                                            <td>@product.Id</td>
+                                            <td><img src="@product.ProductThumbnail" /></td>
+                                            <td>@product.Vendor</td>
+                                            <td>@product.Sku</td>
+                                            <td>@product.Name</td>
+                                            <td>@product.Price.ToString("$#.00")</td>
+                                        </tr>
                                     }
                                 </tbody>
                             </table>

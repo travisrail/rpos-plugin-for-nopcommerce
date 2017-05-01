@@ -514,8 +514,6 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             RailPointofSaleOrderModel model = new RailPointofSaleOrderModel();
             PrepareOrderDetailsModel(model, order);
 
-
-
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/Edit.cshtml", model);
         }
 
@@ -1111,7 +1109,16 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             if (!HasAccessToPos())
                 return AccessDeniedView();
 
-            var model = PrepareAddProductToPOSOrderModel(orderId, productId);
+            //Setup Model
+            var model = new AddPosProductModel
+            {
+                AddProduct = _productService.GetProductById(productId),
+                ProductDetails = PrepareAddProductToPOSOrderModel(orderId, productId),
+                ProductPicture = _pictureService.GetPictureUrl(_productService.GetProductById(productId).ProductPictures.FirstOrDefault().PictureId, targetSize: 200),
+                ProductVendor = _vendorService.GetVendorById(_productService.GetProductById(productId).VendorId)
+            };
+
+            //Display View
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductToPointofSaleOrder.cshtml", model);
         }
 
@@ -1127,15 +1134,15 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
             //basic properties
             decimal unitPriceInclTax;
-            decimal.TryParse(form["UnitPriceInclTax"], out unitPriceInclTax);
+            decimal.TryParse(form["ProductDetails.UnitPriceInclTax"], out unitPriceInclTax);
             decimal unitPriceExclTax;
-            decimal.TryParse(form["UnitPriceExclTax"], out unitPriceExclTax);
+            decimal.TryParse(form["ProductDetails.UnitPriceExclTax"], out unitPriceExclTax);
             int quantity;
-            int.TryParse(form["Quantity"], out quantity);
+            int.TryParse(form["ProductDetails.Quantity"], out quantity);
             decimal priceInclTax;
-            decimal.TryParse(form["SubTotalInclTax"], out priceInclTax);
+            decimal.TryParse(form["ProductDetails.SubTotalInclTax"], out priceInclTax);
             decimal priceExclTax;
-            decimal.TryParse(form["SubTotalExclTax"], out priceExclTax);
+            decimal.TryParse(form["ProductDetails.SubTotalExclTax"], out priceExclTax);
 
             //warnings
             var warnings = new List<string>();
@@ -1284,8 +1291,14 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             }
 
             //errors
-            var model = PrepareAddProductToPOSOrderModel(order.Id, product.Id);
-            model.Warnings.AddRange(warnings);
+            var model = new AddPosProductModel
+            {
+                AddProduct = _productService.GetProductById(productId),
+                ProductDetails = PrepareAddProductToPOSOrderModel(orderId, productId),
+                ProductPicture = _pictureService.GetPictureUrl(_productService.GetProductById(productId).ProductPictures.FirstOrDefault().PictureId, targetSize: 200),
+                ProductVendor = _vendorService.GetVendorById(_productService.GetProductById(productId).VendorId)
+            };
+            model.ProductDetails.Warnings.AddRange(warnings);
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductTorPosOrderModel.cshtml", model);
         }
 

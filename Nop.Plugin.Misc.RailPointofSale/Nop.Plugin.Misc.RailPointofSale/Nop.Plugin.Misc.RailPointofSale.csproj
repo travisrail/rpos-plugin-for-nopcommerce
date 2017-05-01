@@ -129,6 +129,7 @@
   <ItemGroup>
     <Compile Include="Controllers\ConfigurationController.cs" />
     <Compile Include="Controllers\PointofSaleOrderController.cs" />
+    <Compile Include="Models\AddPosProductModel.cs" />
     <Compile Include="Models\ConfigurationModel.cs" />
     <Compile Include="Models\PointofSalePaymentInfoModel.cs" />
     <Compile Include="Models\RailPointofSaleOrderListModel.cs" />
