@@ -309,6 +309,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             {
                 //order statuses
                 RailPointofSaleOrderListModel model = new RailPointofSaleOrderListModel();
+                model.StoreCityStatePostal = _rposSettings.StoreCity + ", " + _stateProvinceService.GetStateProvinceById(_rposSettings.StoreStateProvinceId).Abbreviation + "  " + _rposSettings.StorePostalCode;
+                model.StoreTaxRate = _rposSettings.StoreTaxRate.ToString() + "%";
                 model.AvailableOrderStatuses = OrderStatus.Pending.ToSelectList(false).ToList();
                 model.AvailableOrderStatuses.Insert(0, new SelectListItem
                 { Text = _localizationService.GetResource("Admin.Common.All"), Value = "0", Selected = true });
@@ -339,8 +341,10 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 model.IsLoggedInAsVendor = _workContext.CurrentVendor != null;
 
                 //set default days
-                model.StartDate = (DateTime?)_dateTimeHelper.ConvertToUtcTime(DateTime.Now, _dateTimeHelper.CurrentTimeZone);
-                model.EndDate = (DateTime?)_dateTimeHelper.ConvertToUtcTime(DateTime.Now, _dateTimeHelper.CurrentTimeZone).AddDays(1);
+                DateTime currentDateTime = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day);
+
+                model.StartDate = (DateTime?)_dateTimeHelper.ConvertToUtcTime(currentDateTime, _dateTimeHelper.CurrentTimeZone);
+                model.EndDate = (DateTime?)_dateTimeHelper.ConvertToUtcTime(currentDateTime, _dateTimeHelper.CurrentTimeZone).AddDays(1);
 
                 return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/List.cshtml", model);
             }
@@ -376,7 +380,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 filterByProductId = model.ProductId;
 
             //load orders
-            var orders = _orderService.SearchOrders(storeId: model.StoreId,
+            var orders = _orderService.SearchOrders(storeId: _rposSettings.StoreId,
                 vendorId: model.VendorId,
                 productId: filterByProductId,
                 warehouseId: model.WarehouseId,
@@ -420,7 +424,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //summary report
             //currently we do not support productId and warehouseId parameters for this report
             var reportSummary = _orderReportService.GetOrderAverageReportLine(
-                storeId: model.StoreId,
+                storeId: _rposSettings.StoreId,
                 vendorId: model.VendorId,
                 orderId: 0,
                 paymentMethodSystemName: model.PaymentMethodSystemName,
@@ -435,7 +439,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                 orderNotes: model.OrderNotes);
 
             var profit = _orderReportService.ProfitReport(
-                storeId: model.StoreId,
+                storeId: _rposSettings.StoreId,
                 vendorId: model.VendorId,
                 paymentMethodSystemName: model.PaymentMethodSystemName,
                 osIds: orderStatusIds,
@@ -526,6 +530,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             if (model == null)
                 throw new ArgumentNullException("model");
 
+            model.StoreCityStatePostal = _rposSettings.StoreCity + ", " + _stateProvinceService.GetStateProvinceById(_rposSettings.StoreStateProvinceId).Abbreviation + "  " + _rposSettings.StorePostalCode;
+            model.StoreTaxRate = _rposSettings.StoreTaxRate.ToString() + "%";
             model.Id = order.Id;
             model.OrderStatus = order.OrderStatus.GetLocalizedEnum(_localizationService, _workContext);
             model.OrderStatusId = order.OrderStatusId;
@@ -811,6 +817,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
                     .Where(orderItem => orderItem.Product.VendorId == _workContext.CurrentVendor.Id)
                     .ToList();
             }
+
             foreach (var orderItem in products)
             {
                 if (orderItem.Product.IsDownload)
@@ -903,40 +910,43 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             //loop each product for sale at the POS store and add
             foreach (var prod in sprod)
             {
-                //get picture
-                string imageUrl = "";
-                var picture = _pictureService.GetPicturesByProductId(prod.Id, 1).FirstOrDefault();
+                if (prod.LimitedToStores)
+                { 
+                    //get picture
+                    string imageUrl = "";
+                    var picture = _pictureService.GetPicturesByProductId(prod.Id, 1).FirstOrDefault();
 
-                if (picture != null)
-                {
-                    imageUrl = _pictureService.GetPictureUrl(picture.Id, targetSize: 75);
+                    if (picture != null)
+                    {
+                        imageUrl = _pictureService.GetPictureUrl(picture.Id, targetSize: 75);
+                    }
+                    else
+                    {
+                        imageUrl = _pictureService.GetDefaultPictureUrl(targetSize: 75);
+                    }
+
+                    //get vendor
+                    string vendorname = "";
+
+                    if (prod.VendorId != 0)
+                    {
+                        vendorname = _vendorService.GetVendorById(prod.VendorId).Name;
+                    }
+
+                    //add item
+                    var rposp = new rPOSProduct
+                    {
+                        Id = prod.Id,
+                        Sku = prod.Sku,
+                        Vendor = vendorname,
+                        Name = prod.Name,
+                        Price = prod.Price,
+                        ProductThumbnail = imageUrl
+                    };
+
+                    //add to model
+                    model.AvailableProducts.Add(rposp);
                 }
-                else
-                {
-                    imageUrl = _pictureService.GetDefaultPictureUrl(targetSize: 75);
-                }
-
-                //get vendor
-                string vendorname = "";
-
-                if (prod.VendorId != 0)
-                {
-                    vendorname = _vendorService.GetVendorById(prod.VendorId).Name;
-                }
-
-                //add item
-                var rposp = new rPOSProduct
-                {
-                    Id = prod.Id,
-                    Sku = prod.Sku,
-                    Vendor = vendorname,
-                    Name = prod.Name,
-                    Price = prod.Price,
-                    ProductThumbnail = imageUrl
-                };
-
-                //add to model
-                model.AvailableProducts.Add(rposp);
             }
 
             #endregion
@@ -1734,6 +1744,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             var warnings = paymentController.ValidatePaymentForm(form);
             foreach (var warning in warnings)
                 ModelState.AddModelError("", warning);
+
             if (ModelState.IsValid)
             {
                 //process payment request

@@ -31,7 +31,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Model
         public string StoreCity { get; set; }
         public bool StoreCity_OverrideForStore { get; set; }
 
-        [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StoreState")]
+        [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StoreStateProvinceId")]
         [AllowHtml]
         public int StoreStateProvinceId { get; set; }
         public bool StoreStateProvinceId_OverrideForStore { get; set; }
@@ -41,7 +41,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Model
         public string StorePostalCode { get; set; }
         public bool StorePostalCode_OverrideForStore { get; set; }
 
-        [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StoreCountry")]
+        [NopResourceDisplayName("Plugins.Misc.RailPointofSale.StoreCountryId")]
         [AllowHtml]
         public int StoreCountryId { get; set; }
         public bool StoreCountryId_OverrideForStore { get; set; }

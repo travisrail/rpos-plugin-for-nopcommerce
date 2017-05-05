@@ -122,17 +122,93 @@
                                         {
                                             <div class="message-error">@validationSummary</div>
                                         }
-                                        <h3>Customer Payment</h3>
-                                        <div class="info">
-                                            @Html.Action(Model.PaymentInfoActionName, Model.PaymentInfoControllerName, Model.PaymentInfoRouteValues)
+                                        <script>
+                                            function CopyName() {
+                                                $("#CardholderName").val($("#CustomerFirstName").val() + " " + $("#CustomerLastName").val());
+                                            }
+
+                                            function SwipeCard(card_data) {
+
+                                                var details1 = card_data.split("^");
+
+                                                var card_number = details1[0];
+                                                card_number = card_number.substring(2);
+
+                                                var names = details1[1].split("/");
+                                                var first_name = names[1].trim();
+                                                var last_name = names[0].trim();
+
+                                                var details2 = details1[2].split(";");
+                                                details2 = details2[1].split("=");
+
+                                                var exp_date = details2[1];
+                                                exp_date = exp_date.substring(0, exp_date.length - 1);
+                                                var exp_month = exp_date.substring(2, 4);
+                                                var exp_year = "20" + exp_date.substring(0, 2);
+
+                                                //Populate Fields
+                                                $("#CustomerFirstName").val(first_name);
+                                                $("#CustomerLastName").val(last_name)
+                                                $("#CardholderName").val(first_name + " " + last_name);
+
+                                                $("#CardNumber").val(card_number);
+                                                $("#ExpireMonth").val(exp_month);
+                                                $("#ExpireYear").val(exp_year);
+
+                                                $('#myModal').modal('hide'); //hide modal
+                                                $("#SwipeData").val(""); //clear buffer
+                                                $("#CardCode").focus(); //focus on card code
+                                            }
+
+                                            $(document).ready(function () {
+                                                $("#SwipeData").on('keyup', function (e) {
+                                                    if (e.keyCode == 13) {
+                                                        SwipeCard($("#SwipeData").val());
+                                                    }
+                                                });
+                                            });
+
+                                        </script>
+
+                                        <!-- Modal -->
+                                        <div class="modal fade" id="myModal" role="dialog">
+                                            <div class="modal-dialog">
+                                                <!-- Modal content-->
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                                        <h4 class="modal-title">Swipe Credit / Debit Card</h4>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <h4 class="center">Please swipe credit/debit card now!</h4>
+                                                        <input id="SwipeData" type="text" autofocus style="height: 1px; width: 1px !important; line-height: 1px; border: solid 1px #ffffff; color: #ffffff;" />
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        <script>
+                                            $(document).ready(function () {
+                                                $("#myBtn").click(function () {
+                                                    $("#myModal").modal(); //open modal 
+                                                });
+
+                                                $('#myModal').on('shown.bs.modal', function () {
+                                                    $("#SwipeData").focus(); //focus on textbox
+                                                })  
+                                            });
+                                        </script>
+
                                         <h3>Customer Billing Info</h3>
                                         <div class="form-group">
                                             <div class="col-md-4 custom-custom-billing-label">
                                                 <label style="padding-top: 8px;">First Name</label>
                                             </div>
                                             <div class="col-md-6">
-                                                @Html.TextBoxFor(m => m.CustomerFirstName)
+                                                @Html.TextBoxFor(m => m.CustomerFirstName, new { @onkeyup= "CopyName();" })
                                             </div>
                                         </div>
                                         <div class="form-group">
@@ -140,9 +216,14 @@
                                                 <label style="padding-top: 8px;">Last Name</label>
                                             </div>
                                             <div class="col-md-6">
-                                                @Html.TextBoxFor(m => m.CustomerLastName)
+                                                @Html.TextBoxFor(m => m.CustomerLastName, new { @onkeyup = "CopyName();" })
                                             </div>
                                         </div>
+                                        <h3>Customer Payment</h3>
+                                        <div class="info">
+                                            @Html.Action(Model.PaymentInfoActionName, Model.PaymentInfoControllerName, Model.PaymentInfoRouteValues)
+                                        </div>
+                                        <h3>Receipt Information</h3>
                                         <div class="form-group">
                                             <div class="col-md-4 custom-custom-billing-label">
                                                 <label style="padding-top: 8px;">Email Address</label>
@@ -152,15 +233,21 @@
                                             </div>
                                         </div>
                                         @Html.HiddenFor(model => model.rPosOrderModel.Id, "Value");
-                                        <div class="buttons">
-                                            <button type="submit" name="processpayment" class="btn bg-green">
+                                        <div class="payment-info-next-step-button" style="margin-top: 15px;">
+                                            <button type="button" name="submit-button" class="btn bg-green">
                                                 <i class="fa fa-usd"></i>
                                                 Process Payment
                                             </button>
-                                            <button type="button" name="cancel-process" class="btn bg-red" onclick="location.href='@Url.Action("Edit", "PointofSaleOrder", new { id = Model.rPosOrderModel.Id })'">
-                                                <i class="fa fa-pause"></i>
-                                                Cancel Payment
-                                            </button>
+                                            <!-- Trigger the modal with a button -->
+                                            <div class="btn bg-blue" id="myBtn">
+                                                <i class="fa fa-credit-card"></i>
+                                                Swipe Credit/Debit Card
+                                            </div>
+                                            <!-- Cancel CC Process -->
+                                            <div class="btn bg-red" onclick="location.href='@Url.Action("Edit", "PointofSaleOrder", new { id = Model.rPosOrderModel.Id })'">
+                                                <i class="fa fa-ban"></i>
+                                                Cancel Process
+                                            </div>
                                         </div>
                                     }
                                 </div>

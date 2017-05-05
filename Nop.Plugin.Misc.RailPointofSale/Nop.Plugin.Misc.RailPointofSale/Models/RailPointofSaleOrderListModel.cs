@@ -13,6 +13,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Models
 {
     public class RailPointofSaleOrderListModel : Nop.Admin.Models.Orders.OrderListModel
     {
-
+        public String StoreCityStatePostal { get; set; }
+        public String StoreTaxRate { get; set; }
     }
 }

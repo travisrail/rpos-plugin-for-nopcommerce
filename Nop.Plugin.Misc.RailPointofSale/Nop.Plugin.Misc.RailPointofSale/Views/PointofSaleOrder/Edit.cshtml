@@ -139,7 +139,12 @@
                                                 @Html.NopLabelFor(model => model.Tax)
                                             </div>
                                             <div class="col-md-8">
-                                                @Html.NopDisplayFor(model => model.Tax)
+                                                <div style="margin-top: 6px;">@String.Format("{0:C}", Model.Tax) 
+                                                @if (Model.TaxRates.FirstOrDefault() != null)
+                                                {
+                                                    <span style="font-style: italic;">(@Model.TaxRates.FirstOrDefault().Rate %)</span>
+                                                }
+                                            </div>
                                             </div>
                                         </div>
                                         <div class="form-group">
@@ -206,8 +211,9 @@
                             <script>
                         $(document).ready(function () {
                             $("#products-grid").kendoGrid({
-                                height: 550,
-                                sortable: true
+                                height: 400,
+                                sortable: true,
+                                scrollable: false
                             });
                         });
 

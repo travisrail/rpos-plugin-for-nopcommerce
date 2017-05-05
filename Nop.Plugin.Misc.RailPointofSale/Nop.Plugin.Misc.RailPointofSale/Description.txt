@@ -1,5 +1,5 @@
 ﻿Group: Misc
-FriendlyName: Rail Point-of-Sale
+FriendlyName: rPoint-of-Sale
 SystemName: Misc.RailPointofSale
 Version: 0.1
 SupportedVersions: 3.80

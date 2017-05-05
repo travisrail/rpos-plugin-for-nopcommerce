@@ -105,6 +105,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Description.txt" />
+    <Content Include="logo.jpg" />
     <Content Include="Notes.txt" />
     <Content Include="packages.config" />
     <Content Include="Views\PointofSaleOrder\List.cshtml" />
@@ -172,10 +173,11 @@
     <Error Condition="!Exists('..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.3\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.3\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props'))" />
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>SET DEPLOYPATH=C:\Users\Travis\Documents\Visual Studio 2015\Projects\nopCommerce_3.80_Source\Presentation\Nop.Web\Plugins\Misc.RailPointofSale
+    <PostBuildEvent>SET DEPLOYPATH=C:\Users\trail\Desktop\TFS\website-collection\FLOK\nopCommerce_3.80_Source\Presentation\Nop.Web\Plugins\Misc.RailPointofSale
 rmdir /s /q "%25DEPLOYPATH%25"
 mkdir "%25DEPLOYPATH%25"
 copy Nop.Plugin.Misc.RailPointofSale.dll "%25DEPLOYPATH%25"
+copy ..\logo.jpg "%25DEPLOYPATH%25"
 copy ..\*.txt "%25DEPLOYPATH%25"
 xcopy ..\Views "%25DEPLOYPATH%25\Views" /s /e /i</PostBuildEvent>
   </PropertyGroup>

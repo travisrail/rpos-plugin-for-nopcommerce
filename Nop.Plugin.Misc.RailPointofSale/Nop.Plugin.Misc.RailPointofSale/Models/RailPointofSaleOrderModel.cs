@@ -18,6 +18,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Models
         }
 
         public List<rPOSProduct> AvailableProducts { get; set; }
+        public string StoreCityStatePostal { get; set; }
+        public string StoreTaxRate { get; set; }
     }
 
     public class rPOSProduct
