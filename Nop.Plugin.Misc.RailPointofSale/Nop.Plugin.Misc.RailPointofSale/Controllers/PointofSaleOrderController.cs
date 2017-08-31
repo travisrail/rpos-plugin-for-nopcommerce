@@ -1312,6 +1312,34 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/AddProductTorPosOrderModel.cshtml", model);
         }
 
+        [HttpPost]
+        [ValidateInput(false)]
+        public ActionResult GetProductAttributeCost(int productId, bool validateAttributeConditions, FormCollection form)
+        {
+            var product = _productService.GetProductById(productId);
+            var attributeXml = ParseProductAttributes(product, form);
+            var attcombos = _productAttributeService.GetAllProductAttributeCombinations(productId);
+
+            string itemprice = "";
+
+            foreach (var item in attcombos)
+            {
+                if (item.AttributesXml.ToUpper() == attributeXml.ToUpper())
+                {
+                    if (item.OverriddenPrice != null && item.OverriddenPrice > 0)
+                    {
+                        itemprice = item.OverriddenPrice.ToString();
+                    }
+                }
+            }
+
+
+            return Json(new
+            {
+                UnitPriceExclTax = itemprice
+            });
+        }
+
         [NonAction]
         protected virtual OrderModel.AddOrderProductModel.ProductDetailsModel PrepareAddProductToPOSOrderModel(int orderId, int productId)
         {
@@ -1512,6 +1540,8 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             return attributesXml;
         }
 
+
+
         #endregion
 
         #region Update Order Totals
@@ -1705,6 +1735,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             RailPointofSaleOrderModel _rPOSOrderModel = new RailPointofSaleOrderModel();
             PrepareOrderDetailsModel(_rPOSOrderModel, order);
 
+
             //load payment method
             var paymentMethod = _paymentService.LoadPaymentMethodBySystemName(order.PaymentMethodSystemName);
             if (paymentMethod == null)
@@ -1712,6 +1743,32 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
 
             //model
             var model = PreparePointofSalePaymentInfoModel(paymentMethod, _rPOSOrderModel);
+
+            //years
+            for (int i = 0; i < 15; i++)
+            {
+                string year = Convert.ToString(DateTime.Now.Year + i);
+                model.ExpireYears.Add(new SelectListItem
+                {
+                    Text = year,
+                    Value = year,
+                });
+            }
+
+            //months
+            for (int i = 1; i <= 12; i++)
+            {
+                string text = (i < 10) ? "0" + i : i.ToString();
+                model.ExpireMonths.Add(new SelectListItem
+                {
+                    Text = text,
+                    Value = text,
+                });
+            }
+
+            ViewBag.PublicKey = "";
+
+            //return View
             return View("~/Plugins/Misc.RailPointofSale/Views/PointofSaleOrder/ProcessPointofSaleOrder.cshtml", model);
         }
 
@@ -1791,7 +1848,7 @@ namespace Nop.Plugin.Misc.RailPointofSale.Controllers
             model.PaymentInfoControllerName = controllerName;
             model.PaymentInfoRouteValues = routeValues;
             model.DisplayOrderTotals = _orderSettings.OnePageCheckoutDisplayOrderTotalsOnPaymentInfoTab;
-            model.rPosOrderModel = _rPOSOrderModel;
+            model.rPosOrderModel = _rPOSOrderModel; 
             return model;
         }
 

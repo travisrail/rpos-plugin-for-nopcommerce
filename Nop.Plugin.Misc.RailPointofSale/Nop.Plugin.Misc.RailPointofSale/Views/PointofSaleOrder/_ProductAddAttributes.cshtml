@@ -229,20 +229,13 @@
                 function @(attributeChangeHandlerFuncName)() {
                     $.ajax({
                         cache: false,
-                        url: '@Html.Raw(Url.Action("productdetails_attributechange", "Order", new {productId = productId, validateAttributeConditions = attributesHaveConditions}))',
+                        url: '@Html.Raw(Url.Action("GetProductAttributeCost", "PointofSaleOrder", new {productId = productId, validateAttributeConditions = attributesHaveConditions}))',
                         data: $('#product-details-form').serialize(),
                         type: 'post',
-                        success: function(data) {
-                            if (data.enabledattributemappingids) {
-                                for (var i = 0; i < data.enabledattributemappingids.length; i++) {
-                                    $('#product_attribute_row_' + data.enabledattributemappingids[i]).show();
-                                }
-                            }
-                            if (data.disabledattributemappingids) {
-                                for (var i = 0; i < data.disabledattributemappingids.length; i++) {
-                                    $('#product_attribute_row_' + data.disabledattributemappingids[i]).hide();
-                                }
-                            }
+                        dataType: 'json',
+                        success: function (data) {
+                            var numerictextbox = $("#ProductDetails_UnitPriceExclTax").data("kendoNumericTextBox");
+                            numerictextbox.value(data.UnitPriceExclTax);
                         }
                     });
                 }

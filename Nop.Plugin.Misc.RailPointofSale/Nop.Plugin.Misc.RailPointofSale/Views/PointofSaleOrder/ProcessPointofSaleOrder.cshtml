@@ -221,7 +221,60 @@
                                         </div>
                                         <h3>Customer Payment</h3>
                                         <div class="info">
-                                            @Html.Action(Model.PaymentInfoActionName, Model.PaymentInfoControllerName, Model.PaymentInfoRouteValues)
+                                            @*Start of Credit Card Payment Form*@
+                                            @*@Html.Action(Model.PaymentInfoActionName, Model.PaymentInfoControllerName, Model.PaymentInfoRouteValues)*@
+
+                                            <table width="100%" cellspacing="2" cellpadding="1" border="0">
+                                                <tr>
+                                                    <td>
+                                                        @Html.NopLabelFor(model => model.CardholderName, false)
+                                                    </td>
+                                                    <td>
+                                                        @Html.TextBoxFor(model => model.CardholderName, new { style = "Width: 165px;", autocomplete = "off", Name = "" })
+                                                        @Html.ValidationMessageFor(model => model.CardholderName)
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        @Html.NopLabelFor(model => model.CardNumber, false)
+                                                    </td>
+                                                    <td>
+                                                        @Html.TextBoxFor(model => model.CardNumber, new { style = "Width: 165px;", autocomplete = "off", maxlength = 22, Name = "" })
+                                                        @Html.ValidationMessageFor(model => model.CardNumber)
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        @Html.NopLabelFor(model => model.ExpireMonth, false)
+                                                    </td>
+                                                    <td>
+                                                        @Html.DropDownListFor(model => model.ExpireMonth, Model.ExpireMonths, new { @Name = "" })
+                                                        /
+                                                        @Html.DropDownListFor(model => model.ExpireYear, Model.ExpireYears, new { @Name = "" })
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        @Html.NopLabelFor(model => model.CardCode, false)
+                                                    </td>
+                                                    <td>
+                                                        @Html.TextBoxFor(model => model.CardCode, new { style = "Width: 60px!important;", autocomplete = "off", maxlength = 4, Name = "" })
+                                                        @Html.ValidationMessageFor(model => model.CardCode)
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td><input style="display:none;" type="hidden" name="paymenttoken" id="paymenttoken" /></td>
+                                                    <td></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><input style="display:none;" type="hidden" name="nextstep" value="Next" id="nextstep" /></td>
+                                                    <td></td>
+                                                </tr>
+                                            </table>
+
+                                            <div class="payment-errors text-danger text-center" style="font-size: .95em;"></div>
+
+                                            @*End of Credit Card Payment Form*@
                                         </div>
                                         <h3>Receipt Information</h3>
                                         <div class="form-group">
@@ -258,10 +311,81 @@
                 </div>
             </div>
         </div>
-
-
     </div>
 </div>
+
+
+
+<script type="text/javascript">
+
+    $(document).ready(function () {
+        $.getScript("https://js.stripe.com/v2", function (data, textStatus, jqxhr) {
+            GetScriptCallback();
+        });
+    });
+
+    function GetScriptCallback() {
+        Stripe.setPublishableKey('@ViewBag.PublicKey');
+        $(".payment-info-next-step-button").removeAttr("onClick");
+
+        function stripeResponseHandler(status, response) {
+
+            if (response.error) {
+                // Show the errors on the form
+                $(".payment-errors").text(response.error.message);
+            } else {
+                // response contains id and card, which contains additional card details
+                var token = response.id;
+                $(".payment-errors").text("");
+                var form = $(".payment-info-next-step-button").closest('form');
+
+                $("#paymenttoken").val(token);
+                if (document.location.href.indexOf('onepagecheckout') > -1) {
+                    PaymentInfo.save();
+                }
+                else {
+                    form.submit();
+                }
+            }
+
+            $(".payment-info-next-step-button").removeAttr("disabled");
+        }
+
+        $(".payment-info-next-step-button").unbind().click(function (event) {
+            $('.submit-button').attr("disabled", "disabled");
+
+            if (false == Stripe.card.validateCardNumber($('#CardNumber').val())) {
+                $(".payment-errors").text('@T("Plugins.Payments.Stripe.Errors.InvalidCard")');
+                $(".payment-info-next-step-button").removeAttr("disabled");
+                return false;
+            }
+
+            if (false == Stripe.card.validateExpiry($('#ExpireMonth').val(), $('#ExpireYear').val())) {
+                $(".payment-errors").text('@T("Plugins.Payments.Stripe.Errors.ExpiredCard")');
+                $(".payment-info-next-step-button").removeAttr("disabled");
+                return false;
+            }
+
+            Stripe.card.createToken({
+                number: $('#CardNumber').val(),
+                cvc: $('#CardCode').val(),
+                exp_month: $('#ExpireMonth').val(),
+                exp_year: $('#ExpireYear').val(),
+                name: $('#CardholderName').val(),
+                address_line1: '',
+                address_line2: '',
+                address_city: '',
+                address_state: '',
+                address_zip: '',
+                address_country: ''
+            }, stripeResponseHandler);
+
+            return false;
+        });
+    };
+
+</script>
+
 
 
 
